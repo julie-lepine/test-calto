@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulateur de primes travaux — CEE & MaPrimeRénov'</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <h1>Simulateur de primes travaux - CEE et MaPrimeRénov’</h1>
+      <p class="header__subtitle">
+        Estimation indicative pour les primes <strong>CEE</strong> et <strong>MaPrimeRénov’</strong> : vous pouvez saisir <strong>plusieurs projets de travaux</strong> (lots) ; le total affiché est la somme des aides estimées par projet, selon votre foyer et le code postal du logement.
+      </p>
+    </header>
+
+    <main class="main">
+      <form id="simulation-form" class="card form" novalidate>
+        <input type="hidden" name="region" id="region" value="" />
+        <h2 class="card__title">Votre situation</h2>
+
+        <div class="form__grid">
+          <label class="field">
+            <span class="field__label">Type de logement</span>
+            <select name="housingType" id="housingType" required>
+              <option value="">— Choisir —</option>
+              <option value="maison">Maison</option>
+              <option value="appartement">Appartement</option>
+            </select>
+            <span class="field__error" id="err-housingType" hidden></span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Statut</span>
+            <select name="status" id="status" required>
+              <option value="">— Choisir —</option>
+              <option value="occupant">Propriétaire occupant</option>
+              <option value="bailleur">Propriétaire bailleur</option>
+              <option value="locataire">Locataire</option>
+              <option value="residence_secondaire">Propriétaire — résidence secondaire</option>
+              <option value="sci">SCI / société</option>
+            </select>
+            <span class="field__error" id="err-status" hidden></span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Année de construction du logement</span>
+            <input
+              type="number"
+              name="constructionYear"
+              id="constructionYear"
+              min="1800"
+              max="2030"
+              step="1"
+              placeholder="Ex. 1985"
+              required
+            />
+            <span class="field__error" id="err-constructionYear" hidden></span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Surface du logement à rénover (m²)</span>
+            <input
+              type="number"
+              name="surfaceARenover"
+              id="surfaceARenover"
+              min="1"
+              step="0.01"
+              placeholder="Ex. 120"
+              required
+            />
+            <span class="field__error" id="err-surfaceARenover" hidden></span>
+          </label>
+
+          <label class="field field--full">
+            <span class="field__label">Adresse du logement</span>
+            <input
+              type="text"
+              name="addressLine"
+              id="address"
+              autocomplete="street-address"
+              placeholder="Numéro, rue…"
+              required
+            />
+            <span class="field__error" id="err-address" hidden></span>
+            <span class="field__hint" id="address-hint">
+              L’autocomplétion Google peut compléter la ville et le code postal si une clé API est configurée dans le script.
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Ville</span>
+            <input
+              type="text"
+              name="city"
+              id="city"
+              autocomplete="address-level2"
+              placeholder="Ex. Lyon"
+              required
+            />
+            <span class="field__error" id="err-city" hidden></span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Code postal</span>
+            <input
+              type="text"
+              name="postalCode"
+              id="postalCode"
+              inputmode="numeric"
+              maxlength="5"
+              pattern="[0-9]{5}"
+              placeholder="Ex. 75001"
+              required
+              title="5 chiffres"
+            />
+            <span class="field__error" id="err-postalCode" hidden></span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Revenus fiscaux de référence (€ / an)</span>
+            <input type="number" name="income" id="income" min="0" step="1" placeholder="Ex. 32000" required />
+            <span class="field__error" id="err-income" hidden></span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Personnes dans le foyer</span>
+            <input type="number" name="household" id="household" min="1" max="20" step="1" value="1" required />
+            <span class="field__error" id="err-household" hidden></span>
+          </label>
+
+          <label class="field field--full">
+            <span class="field__label">Énergie de chauffage avant travaux</span>
+            <select name="heatingBefore" id="heatingBefore" required>
+              <option value="">— Choisir —</option>
+              <option value="bois">Bois</option>
+              <option value="electricite">Électricité</option>
+              <option value="fioul">Fioul</option>
+              <option value="gaz">Gaz</option>
+            </select>
+            <span class="field__error" id="err-heatingBefore" hidden></span>
+          </label>
+
+          <div class="field field--full projects-block">
+            <span class="field__label">Projets de travaux</span>
+            <p class="field__hint projects-block__intro">
+              Ajoutez un ou plusieurs lots. Chaque projet a son type de travaux et, si besoin, une surface ou un nombre d’ouvrants.
+            </p>
+            <div id="projects-container" class="projects-container"></div>
+            <span class="field__error" id="err-projects" hidden></span>
+            <button type="button" class="btn btn--secondary" id="add-project-btn">
+              Ajouter un projet
+            </button>
+          </div>
+        </div>
+
+        <select id="work-type-master" class="work-type-master" disabled hidden aria-hidden="true" tabindex="-1">
+          <option value="">— Choisir —</option>
+          <optgroup label="Isolations">
+            <option value="rampants">Isolation des rampants de toiture</option>
+            <option value="toiture terrasses">Isolation des toitures-terrasses</option>
+            <option value="combles perdus">Isolation des combles perdus</option>
+            <option value="murs">Isolation des murs </option>
+            <option value="plancher">Isolation d'un plancher</option>
+            <option value="menuiseries">Remplacement de fenêtres et porte-fenêtres</option>
+          </optgroup>
+          <optgroup label="Chauffage &amp; eau chaude">
+            <option value="chauffe eau thermo">Chauffe-eau thermodynamique</option>
+            <option value="pac air eau">Pompe à chaleur air / eau</option>
+            <option value="pac geo">
+              Pompe à chaleur géothermique ou sur capteurs solaires (dont PAC hybrides)
+            </option>
+            <option value="chauffe eau solaire individuel">Chauffe-eau solaire individuel</option>
+            <option value="chauffe eau solaire combiné">Chauffe-eau solaire combiné</option>
+            <option value="chaudieres biomasse">Chaudière biomasse</option>
+            <option value="pac air air">Pompe à chaleur air / air</option>
+            <option value="cuve fioul">Dépose de cuve à fioul</option>
+          </optgroup>
+          <optgroup label="Foyer &amp; bois">
+            <option value="poele buches">Poêle ou cuisinière à bûches</option>
+            <option value="poele granules">Poêle ou cuisinière à granulés</option>
+            <option value="foyer ferme">Foyer fermé ou insert (bûches ou granulés)</option>
+          </optgroup>
+          <optgroup label="Ventilation">
+            <option value="vmc simple flux">VMC simple flux</option>
+            <option value="double flux">VMC double flux</option>
+          </optgroup>
+        </select>
+
+        <div class="form__actions">
+          <button type="submit" class="btn btn--primary" id="submit-btn">
+            Lancer la simulation
+          </button>
+        </div>
+
+        <!-- Barre de progression (animation légère au calcul) -->
+        <div class="progress" id="progress" aria-hidden="true" hidden>
+          <div class="progress__bar" id="progress-bar"></div>
+          <span class="progress__label">Calcul en cours…</span>
+        </div>
+      </form>
+
+      <section id="result-panel" class="card result" hidden aria-live="polite">
+        <h2 class="card__title">Résultat</h2>
+        <p class="result__blocage" id="result-blocage" hidden role="alert"></p>
+        <p class="result__category" id="result-category"></p>
+        <p class="result__situation" id="result-situation"></p>
+        <p class="result__amount">
+          <span class="result__amount-label">Montant total estimé MaPrimeRénov’</span>
+          <strong id="result-amount">—</strong>
+        </p>
+        <p class="result__amount">
+          <span class="result__amount-label">Prime CEE estimée</span>
+          <strong id="result-cee-amount">—</strong>
+        </p>
+        <p class="result__breakdown-title">Détail MaPrimeRénov’ par produit / projet</p>
+        <div id="result-breakdown" class="result-breakdown" aria-label="Détail des primes par projet"></div>
+        <p class="result__breakdown-title">Détail CEE par produit / projet</p>
+        <div id="result-breakdown-cee" class="result-breakdown" aria-label="Détail des primes CEE par projet"></div>
+        <p class="result__disclaimer">
+          Estimation indicative — primes MaPrimeRénov’ et CEE (plusieurs lots : total simplifié) — simulation non contractuelle
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Total = somme des projets saisis ; en réalité CEE et MaPrimeRénov’ (parcours accompagné, cumuls, plafonds globaux, etc.) peuvent différer. Données à titre indicatif.
+      </p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
