@@ -1,12 +1,12 @@
 /**
  * Simulateur de primes rénovation énergétique (frontend pur)
  * ---------------------------------------------------------------------------
- * Ce fichier contient :
- * 1. Les barèmes de plafonds (Île-de-France / autres régions)
+ * Ce fichier assemble l’interface : barèmes MPR et plafonds dans ce fichier ;
+ * calculs CEE dans `cee-calculator.js` (chargé avant ce script).
+ * 1. Plafonds et catégorie de revenus (Île-de-France / autres régions)
  * 2. Adresse / code postal → région ; autocomplétion Google (optionnelle)
- * 3. La fonction de catégorie de revenus
- * 4. Le calcul du montant d’aide selon les travaux
- * 5. L’animation de progression et l’affichage du résultat (sans rechargement)
+ * 3. Calcul MaPrimeRénov’ (montant d’aide) et branchement calculateCEEPrime (CEE)
+ * 4. Animation de progression et affichage du résultat
  */
 
 // ---------------------------------------------------------------------------
@@ -98,46 +98,6 @@ function getCategorieRevenus(revenuFiscalRef, nbPersonnes, ileDeFrance) {
   if (revenuFiscalRef <= plafondM) return "modeste";
   if (revenuFiscalRef <= plafondI) return "intermediaire";
   return "superieur";
-}
-
-// ---------------------------------------------------------------------------
-// 2.1 Zones Géo CEE
-// ---------------------------------------------------------------------------
-
-const zoneByDept = {
-  // H1
-  "01":"H1","02":"H1","03":"H1","05":"H1","08":"H1","10":"H1","14":"H1","15":"H1",
-  "19":"H1","21":"H1","23":"H1","25":"H1","27":"H1","28":"H1","38":"H1","39":"H1",
-  "42":"H1","43":"H1","45":"H1","51":"H1","52":"H1","54":"H1","55":"H1","57":"H1",
-  "58":"H1","59":"H1","60":"H1","61":"H1","62":"H1","63":"H1","67":"H1","68":"H1",
-  "69":"H1","70":"H1","71":"H1","73":"H1","74":"H1","75":"H1","76":"H1","77":"H1",
-  "78":"H1","80":"H1","87":"H1","88":"H1","89":"H1","90":"H1","91":"H1","92":"H1",
-  "93":"H1","94":"H1","95":"H1",
-
-  // H2
-  "04":"H2","07":"H2","09":"H2","12":"H2","16":"H2","17":"H2","18":"H2","22":"H2",
-  "24":"H2","26":"H2","29":"H2","31":"H2","32":"H2","33":"H2","35":"H2","36":"H2",
-  "37":"H2","40":"H2","41":"H2","44":"H2","46":"H2","47":"H2","48":"H2","49":"H2",
-  "50":"H2","53":"H2","56":"H2","64":"H2","65":"H2","72":"H2","79":"H2","81":"H2",
-  "82":"H2","84":"H2","85":"H2","86":"H2",
-
-  // H3
-  "06":"H3","11":"H3","13":"H3","20":"H3","30":"H3","34":"H3","66":"H3","83":"H3"
-};
-
-function getZoneCEE(postalCode) {
-  if (!postalCode || typeof postalCode !== "string") {
-    console.log("❌ Code postal invalide :", postalCode);
-    return null;
-  }
-
-  const cleaned = postalCode.trim();
-  const dept = cleaned.substring(0, 2);
-  const zone = zoneByDept[dept] || null;
-
-  console.log(`📍 Code postal: ${postalCode} → Département: ${dept} → Zone CEE: ${zone}`);
-
-  return zone;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,354 +326,6 @@ function calculerAideMPR(categorie, typeTravaux, valeur) {
   }
 
   return { montant: 0, eligible: false, detail: "Type de travaux non reconnu." };
-}
-
-/**
- * CEE Prime Calculator
- * Généré depuis cee_calculator_20251201.xlsx
- *
- * Formule générale :
- *   (geoZoneCorrectionFactor * surfaceARenoverCorrectiveFactor * nbKwhCumac * montantKwhCumac) / 1000
- *
- * Note tableur : dans ce barème, les montants CEE sont identiques pour toutes
- * les typologies de revenu (tres_modeste = modeste = intermediaire = superieur).
- * Le montant_TM présent dans le tableur (8.124797 pour fioul/gaz) n'est pas
- * appliqué dans les colonnes de calcul — on respecte les valeurs exactes du tableur.
- *
- * Dépend de la fonction externe déjà existante : getZoneCEE(postalCode) → "H1"|"H2"|"H3"
- *
- * @param {Object} params
- * @param {string}  params.postalCode       - Code postal du logement
- * @param {number}  params.revenuFiscalRef  - Revenu fiscal de référence (foyer)
- * @param {number}  params.nbPersonnes      - Nombre de personnes dans le foyer
- * @param {string}  params.housingType      - "maison" | "appartement"
- * @param {string}  params.heatingBefore    - "bois" | "electricite" | "fioul" | "gaz"
- * @param {number}  [params.surface_m2]     - Surface habitable (double flux uniquement)
- * @param {number}  [params.valeur]         - Quantité / m² (menuiseries, rampants, toiture terrasses)
- * @returns {{ [travaux: string]: number }}  Prime en € pour la catégorie de revenu du foyer
- */
-
-// ---------------------------------------------------------------------------
-// Plafonds de ressources 2025 (source ANAH)
-// Clé = nb de personnes, valeur = { tm, m, i }  (superieur = au-delà de i)
-// ---------------------------------------------------------------------------
-const PLAFONDS = {
-  1:     { tm: 17009, m: 21805, i: 30549 },
-  2:     { tm: 24875, m: 31903, i: 44907 },
-  3:     { tm: 29917, m: 38349, i: 54071 },
-  4:     { tm: 34948, m: 44787, i: 63235 },
-  5:     { tm: 40002, m: 51281, i: 72400 },
-  extra: { tm:  5028, m:  6496, i:  9165 }, // par personne supplémentaire au-delà de 5
-};
-
-/**
- * Détermine la catégorie de revenu du foyer.
- * @param {number} revenuFiscalRef
- * @param {number} nbPersonnes
- * @returns {"tres_modeste"|"modeste"|"intermediaire"|"superieur"}
- */
-function getTypologieClient(revenuFiscalRef, nbPersonnes) {
-  const n        = Math.max(1, Math.min(nbPersonnes, 5));
-  const base     = PLAFONDS[n];
-  const sup      = nbPersonnes > 5 ? (nbPersonnes - 5) : 0;
-
-  const plafondTM = base.tm + sup * PLAFONDS.extra.tm;
-  const plafondM  = base.m  + sup * PLAFONDS.extra.m;
-  const plafondI  = base.i  + sup * PLAFONDS.extra.i;
-
-  if (revenuFiscalRef <= plafondTM) return "tres_modeste";
-  if (revenuFiscalRef <= plafondM)  return "modeste";
-  if (revenuFiscalRef <= plafondI)  return "intermediaire";
-  return "superieur";
-}
-
-// ---------------------------------------------------------------------------
-// Table des primes CEE (valeurs extraites du tableur Excel)
-//
-// Structure de chaque entrée :
-//   c           : nom du travail (construction)
-//   geo         : zone climatique "H1" | "H2" | "H3"   (undefined si non pertinent)
-//   housing     : "maison" | "appartement"              (undefined si non pertinent)
-//   heating     : énergie chauffage avant travaux        (undefined si non pertinent)
-//   surfaceSlot : plage de surface pour double flux      (undefined si non pertinent)
-//   gcf         : geoZoneCorrectionFactor
-//   scf         : surfaceARenoverCorrectiveFactor
-//   kwh         : nbKwhCumac  (même valeur pour tm/m/i/s dans ce barème)
-//   mkwh        : montantKwhCumac par m²/unité (valeurs du tableur)
-//
-// Formule : (gcf * scf * kwh * mkwh) / 1000
-// ---------------------------------------------------------------------------
-const CEE_DATA = [
-
-  // ── chauffe eau solaire combiné ──────────────────────────────────────────
-  // Variables : geoZone (col C) + heatingBefore (col F)
-  { c: "chauffe eau solaire combiné", geo: "H1", heating: "fioul",       gcf: 1, scf: 1, kwh: 769200, mkwh: 7.280291 },
-  { c: "chauffe eau solaire combiné", geo: "H1", heating: "gaz",         gcf: 1, scf: 1, kwh: 769200, mkwh: 7.280291 },
-  { c: "chauffe eau solaire combiné", geo: "H1", heating: "bois",        gcf: 1, scf: 1, kwh: 134800, mkwh: 5.4      },
-  { c: "chauffe eau solaire combiné", geo: "H1", heating: "electricite", gcf: 1, scf: 1, kwh: 134800, mkwh: 5.4      },
-  { c: "chauffe eau solaire combiné", geo: "H2", heating: "fioul",       gcf: 1, scf: 1, kwh: 769200, mkwh: 7.280291 },
-  { c: "chauffe eau solaire combiné", geo: "H2", heating: "gaz",         gcf: 1, scf: 1, kwh: 769200, mkwh: 7.280291 },
-  { c: "chauffe eau solaire combiné", geo: "H2", heating: "bois",        gcf: 1, scf: 1, kwh: 121000, mkwh: 5.4      },
-  { c: "chauffe eau solaire combiné", geo: "H2", heating: "electricite", gcf: 1, scf: 1, kwh: 121000, mkwh: 5.4      },
-  { c: "chauffe eau solaire combiné", geo: "H3", heating: "fioul",       gcf: 1, scf: 1, kwh: 769200, mkwh: 7.280291 },
-  { c: "chauffe eau solaire combiné", geo: "H3", heating: "gaz",         gcf: 1, scf: 1, kwh: 769200, mkwh: 7.280291 },
-  { c: "chauffe eau solaire combiné", geo: "H3", heating: "bois",        gcf: 1, scf: 1, kwh: 100500, mkwh: 5.4      },
-  { c: "chauffe eau solaire combiné", geo: "H3", heating: "electricite", gcf: 1, scf: 1, kwh: 100500, mkwh: 5.4      },
-
-  // ── chauffe eau solaire individuel ───────────────────────────────────────
-  // Variable : geoZone (col C)
-  { c: "chauffe eau solaire individuel", geo: "H1", gcf: 1, scf: 1, kwh: 18500, mkwh: 5.4 },
-  { c: "chauffe eau solaire individuel", geo: "H2", gcf: 1, scf: 1, kwh: 21000, mkwh: 5.4 },
-  { c: "chauffe eau solaire individuel", geo: "H3", gcf: 1, scf: 1, kwh: 24200, mkwh: 5.4 },
-
-  // ── chauffe eau thermo ───────────────────────────────────────────────────
-  // Variable : housingType (col B)
-  { c: "chauffe eau thermo", housing: "maison",      gcf: 1, scf: 1, kwh: 14700, mkwh: 5.4 },
-  { c: "chauffe eau thermo", housing: "appartement", gcf: 1, scf: 1, kwh: 11800, mkwh: 5.4 },
-
-  // ── double flux ──────────────────────────────────────────────────────────
-  // Variables : geoZone (col C) + surface_m2 (col G) → surfaceSlot → scf
-  { c: "double flux", geo: "H1", surfaceSlot: "S < 35",        gcf: 1, scf: 0.3, kwh: 39700, mkwh: 5.4 },
-  { c: "double flux", geo: "H2", surfaceSlot: "S < 35",        gcf: 1, scf: 0.3, kwh: 32500, mkwh: 5.4 },
-  { c: "double flux", geo: "H3", surfaceSlot: "S < 35",        gcf: 1, scf: 0.3, kwh: 21600, mkwh: 5.4 },
-  { c: "double flux", geo: "H1", surfaceSlot: "35 ≤ S < 60",   gcf: 1, scf: 0.5, kwh: 39700, mkwh: 5.4 },
-  { c: "double flux", geo: "H2", surfaceSlot: "35 ≤ S < 60",   gcf: 1, scf: 0.5, kwh: 32500, mkwh: 5.4 },
-  { c: "double flux", geo: "H3", surfaceSlot: "35 ≤ S < 60",   gcf: 1, scf: 0.5, kwh: 21600, mkwh: 5.4 },
-  { c: "double flux", geo: "H1", surfaceSlot: "60 ≤ S < 70",   gcf: 1, scf: 0.6, kwh: 39700, mkwh: 5.4 },
-  { c: "double flux", geo: "H2", surfaceSlot: "60 ≤ S < 70",   gcf: 1, scf: 0.6, kwh: 32500, mkwh: 5.4 },
-  { c: "double flux", geo: "H3", surfaceSlot: "60 ≤ S < 70",   gcf: 1, scf: 0.6, kwh: 21600, mkwh: 5.4 },
-  { c: "double flux", geo: "H1", surfaceSlot: "70 ≤ S < 90",   gcf: 1, scf: 0.7, kwh: 39700, mkwh: 5.4 },
-  { c: "double flux", geo: "H2", surfaceSlot: "70 ≤ S < 90",   gcf: 1, scf: 0.7, kwh: 32500, mkwh: 5.4 },
-  { c: "double flux", geo: "H3", surfaceSlot: "70 ≤ S < 90",   gcf: 1, scf: 0.7, kwh: 21600, mkwh: 5.4 },
-  { c: "double flux", geo: "H1", surfaceSlot: "90 ≤ S < 110",  gcf: 1, scf: 1.0, kwh: 39700, mkwh: 5.4 },
-  { c: "double flux", geo: "H2", surfaceSlot: "90 ≤ S < 110",  gcf: 1, scf: 1.0, kwh: 32500, mkwh: 5.4 },
-  { c: "double flux", geo: "H3", surfaceSlot: "90 ≤ S < 110",  gcf: 1, scf: 1.0, kwh: 21600, mkwh: 5.4 },
-  { c: "double flux", geo: "H1", surfaceSlot: "110 ≤ S ≤ 130", gcf: 1, scf: 1.1, kwh: 39700, mkwh: 5.4 },
-  { c: "double flux", geo: "H2", surfaceSlot: "110 ≤ S ≤ 130", gcf: 1, scf: 1.1, kwh: 32500, mkwh: 5.4 },
-  { c: "double flux", geo: "H3", surfaceSlot: "110 ≤ S ≤ 130", gcf: 1, scf: 1.1, kwh: 21600, mkwh: 5.4 },
-  { c: "double flux", geo: "H1", surfaceSlot: "130 < S",        gcf: 1, scf: 1.6, kwh: 39700, mkwh: 5.4 },
-  { c: "double flux", geo: "H2", surfaceSlot: "130 < S",        gcf: 1, scf: 1.6, kwh: 32500, mkwh: 5.4 },
-  { c: "double flux", geo: "H3", surfaceSlot: "130 < S",        gcf: 1, scf: 1.6, kwh: 21600, mkwh: 5.4 },
-
-  // ── menuiseries ──────────────────────────────────────────────────────────
-  // Variable : geoZone (col C) — résultat × valeur (nb d'unités)
-  { c: "menuiseries", geo: "H1", gcf: 1, scf: 1, kwh: 3800, mkwh: 5.4 },
-  { c: "menuiseries", geo: "H2", gcf: 1, scf: 1, kwh: 3100, mkwh: 5.4 },
-  { c: "menuiseries", geo: "H3", gcf: 1, scf: 1, kwh: 2100, mkwh: 5.4 },
-
-  // ── rampants ─────────────────────────────────────────────────────────────
-  // Variable : geoZone (col C) — résultat × valeur (surface m²)
-  { c: "rampants", geo: "H1", gcf: 1, scf: 1, kwh: 1700, mkwh: 5.4 },
-  { c: "rampants", geo: "H2", gcf: 1, scf: 1, kwh: 1400, mkwh: 5.4 },
-  { c: "rampants", geo: "H3", gcf: 1, scf: 1, kwh:  920, mkwh: 5.4 },
-
-  // ── toiture terrasses ────────────────────────────────────────────────────
-  // Variable : geoZone (col C) — résultat × valeur (surface m²)
-  { c: "toiture terrasses", geo: "H1", gcf: 1, scf: 1, kwh: 1200, mkwh: 5.4 },
-  { c: "toiture terrasses", geo: "H2", gcf: 1, scf: 1, kwh: 1000, mkwh: 5.4 },
-  { c: "toiture terrasses", geo: "H3", gcf: 1, scf: 1, kwh:  670, mkwh: 5.4 },
-];
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Retourne le surfaceSlot correspondant à la surface réelle pour double flux.
- * @param {number} surface_m2
- * @returns {string}
- */
-function getSurfaceSlotDoubleFlux(surface_m2) {
-  const s = Number(surface_m2);
-  if (s < 35)   return "S < 35";
-  if (s < 60)   return "35 ≤ S < 60";
-  if (s < 70)   return "60 ≤ S < 70";
-  if (s < 90)   return "70 ≤ S < 90";
-  if (s < 110)  return "90 ≤ S < 110";
-  if (s <= 130) return "110 ≤ S ≤ 130";
-  return "130 < S";
-}
-
-/**
- * Applique la formule : (gcf * scf * kwh * mkwh) / 1000
- * @param {{ gcf: number, scf: number, kwh: number, mkwh: number }} row
- * @returns {number}
- */
-function applyFormula(row) {
-  return (row.gcf * row.scf * row.kwh * row.mkwh) / 1000;
-}
-
-// ---------------------------------------------------------------------------
-// Fonction principale — prime pour UNE catégorie de revenu
-// ---------------------------------------------------------------------------
-
-/**
- * Calcule les primes CEE pour tous les types de travaux applicables.
- *
- * @param {Object} params
- * @param {string}  params.postalCode       Code postal du logement
- * @param {number}  params.revenuFiscalRef  Revenu fiscal de référence
- * @param {number}  params.nbPersonnes      Nb de personnes dans le foyer
- * @param {string}  params.housingType      "maison" | "appartement"
- * @param {string}  params.heatingBefore    "bois" | "electricite" | "fioul" | "gaz"
- * @param {number}  [params.surface_m2]     Surface habitable (double flux uniquement)
- * @param {number}  [params.valeur=1]       Multiplicateur (menuiseries / rampants / toiture terrasses)
- * @returns {{ [travaux: string]: number }}
- */
-function calculateCEEPrimes({
-  postalCode,
-  revenuFiscalRef,
-  nbPersonnes,
-  housingType,
-  heatingBefore,
-  surface_m2,
-  valeur = 1,
-}) {
-  // Zone geo via la fonction déjà présente dans l'app
-  const geoZone  = getZoneCEE(postalCode);       // "H1" | "H2" | "H3"
-  // Typologie : déterminée mais les primes CEE sont identiques quelle que soit la catégorie
-  // (valeur conservée pour compatibilité future / évolution barème)
-  const typologie = getTypologieClient(revenuFiscalRef, nbPersonnes); // eslint-disable-line no-unused-vars
-
-  const housing  = (housingType   || "").toLowerCase();
-  const heating  = (heatingBefore || "").toLowerCase();
-  const result   = {};
-
-  // ── chauffe eau solaire combiné ──────────────────────────────────────────
-  const cescRow = CEE_DATA.find(r =>
-    r.c === "chauffe eau solaire combiné" &&
-    r.geo === geoZone &&
-    r.heating === heating
-  );
-  if (cescRow) {
-    result["chauffe eau solaire combiné"] = applyFormula(cescRow);
-  }
-
-  // ── chauffe eau solaire individuel ───────────────────────────────────────
-  const cesiRow = CEE_DATA.find(r =>
-    r.c === "chauffe eau solaire individuel" &&
-    r.geo === geoZone
-  );
-  if (cesiRow) {
-    result["chauffe eau solaire individuel"] = applyFormula(cesiRow);
-  }
-
-  // ── chauffe eau thermo ───────────────────────────────────────────────────
-  const cetRow = CEE_DATA.find(r =>
-    r.c === "chauffe eau thermo" &&
-    r.housing === housing
-  );
-  if (cetRow) {
-    result["chauffe eau thermo"] = applyFormula(cetRow);
-  }
-
-  // ── double flux ──────────────────────────────────────────────────────────
-  if (surface_m2 !== undefined && surface_m2 !== null) {
-    const slot  = getSurfaceSlotDoubleFlux(surface_m2);
-    const dfRow = CEE_DATA.find(r =>
-      r.c === "double flux" &&
-      r.geo === geoZone &&
-      r.surfaceSlot === slot
-    );
-    if (dfRow) {
-      result["double flux"] = applyFormula(dfRow);
-    }
-  }
-
-  // ── menuiseries — × valeur (nb d'unités) ─────────────────────────────────
-  const menuRow = CEE_DATA.find(r =>
-    r.c === "menuiseries" && r.geo === geoZone
-  );
-  if (menuRow) {
-    result["menuiseries"] = applyFormula(menuRow) * valeur;
-  }
-
-  // ── rampants — × valeur (m²) ─────────────────────────────────────────────
-  const rampRow = CEE_DATA.find(r =>
-    r.c === "rampants" && r.geo === geoZone
-  );
-  if (rampRow) {
-    result["rampants"] = applyFormula(rampRow) * valeur;
-  }
-
-  // ── toiture terrasses — × valeur (m²) ────────────────────────────────────
-  const ttRow = CEE_DATA.find(r =>
-    r.c === "toiture terrasses" && r.geo === geoZone
-  );
-  if (ttRow) {
-    result["toiture terrasses"] = applyFormula(ttRow) * valeur;
-  }
-
-  return result;
-}
-
-// ---------------------------------------------------------------------------
-// Variante pratique : retourne les primes par travail, sans revenu requis
-// (les 4 typologies donnent la même valeur dans ce barème)
-// ---------------------------------------------------------------------------
-
-/**
- * Calcule la prime CEE unitaire pour un type de travail donné.
- * Ne nécessite pas le revenu fiscal (identique pour toutes typologies).
- *
- * @param {string}  travail       Nom du travail (clé de CEE_DATA)
- * @param {string}  postalCode    Code postal
- * @param {string}  housingType   "maison" | "appartement"
- * @param {string}  heatingBefore "bois" | "electricite" | "fioul" | "gaz"
- * @param {number}  [surface_m2]  Surface habitable (double flux)
- * @param {number}  [valeur=1]    Multiplicateur (menuiseries / rampants / toiture)
- * @returns {number|null}
- */
-function calculateCEEPrime(travail, { postalCode, housingType, heatingBefore, surface_m2, valeur = 1 }) {
-  const geoZone = getZoneCEE(postalCode);
-  const housing = (housingType   || "").toLowerCase();
-  const heating = (heatingBefore || "").toLowerCase();
-
-  let row;
-
-  switch (travail) {
-    case "chauffe eau solaire combiné":
-      row = CEE_DATA.find(r => r.c === travail && r.geo === geoZone && r.heating === heating);
-      return row ? applyFormula(row) : null;
-
-    case "chauffe eau solaire individuel":
-      row = CEE_DATA.find(r => r.c === travail && r.geo === geoZone);
-      return row ? applyFormula(row) : null;
-
-    case "chauffe eau thermo":
-      row = CEE_DATA.find(r => r.c === travail && r.housing === housing);
-      return row ? applyFormula(row) : null;
-
-    case "double flux": {
-      if (surface_m2 === undefined || surface_m2 === null) return null;
-      const slot = getSurfaceSlotDoubleFlux(surface_m2);
-      row = CEE_DATA.find(r => r.c === travail && r.geo === geoZone && r.surfaceSlot === slot);
-      return row ? applyFormula(row) : null;
-    }
-
-    case "menuiseries":
-    case "rampants":
-    case "toiture terrasses":
-      row = CEE_DATA.find(r => r.c === travail && r.geo === geoZone);
-      return row ? applyFormula(row) * valeur : null;
-
-    default:
-      return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Export (Node.js / bundler)
-// ---------------------------------------------------------------------------
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    calculateCEEPrimes,
-    calculateCEEPrime,
-    getTypologieClient,
-    getSurfaceSlotDoubleFlux,
-    CEE_DATA,
-    PLAFONDS,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1287,10 +899,13 @@ function renderCEEBreakdown(projets, categorie, opts) {
       return;
     }
 
-    // Pour double flux : la surface habitable du logement est utilisée (surfaceARenover).
-    // Pour les autres travaux au m² ou à l'unité, on utilise p.valeur.
-    const surface_m2ForCEE = p.workType === "double flux" ? surfaceARenover : undefined;
-    const valeurForCEE = p.workType === "double flux" ? 1 : (p.valeur || 1);
+    const needsSurfaceForCEE =
+      p.workType === "double flux" ||
+      p.workType === "vmc simple flux" ||
+      p.workType === "pac air air" ||
+      p.workType === "pac air eau";
+    const surface_m2ForCEE = needsSurfaceForCEE ? surfaceARenover : undefined;
+    const valeurForCEE = needsSurfaceForCEE ? 1 : (p.valeur || 1);
 
     const prime = calculateCEEPrime(p.workType, {
       postalCode: postal,
@@ -1298,6 +913,7 @@ function renderCEEBreakdown(projets, categorie, opts) {
       heatingBefore: heatingBeforeVal,
       surface_m2: surface_m2ForCEE,
       valeur: valeurForCEE,
+      categorieRevenus: categorie,
     });
 
     if (prime === null || prime <= 0) {
@@ -1329,10 +945,22 @@ function buildCEEDetailText(workType, prime, zone, valeur, surface_m2) {
   if (workType === "double flux") {
     return "VMC double flux" + zoneLabel + " — surface " + surface_m2 + " m² : prime estimée " + formatEuros(prime) + ".";
   }
+  if (workType === "vmc simple flux") {
+    return (WORK_TYPE_LABELS[workType] || workType) + zoneLabel + " — surface " + surface_m2 + " m² : prime estimée " + formatEuros(prime) + ".";
+  }
+  if (workType === "pac air air" || workType === "pac air eau") {
+    return (WORK_TYPE_LABELS[workType] || workType) + zoneLabel + " — surface " + surface_m2 + " m² : prime estimée " + formatEuros(prime) + ".";
+  }
   if (workType === "menuiseries") {
     return "Menuiseries" + zoneLabel + " — " + valeur + " ouvrant(s) : prime estimée " + formatEuros(prime) + ".";
   }
-  if (workType === "rampants" || workType === "toiture terrasses") {
+  if (
+    workType === "rampants" ||
+    workType === "toiture terrasses" ||
+    workType === "combles perdus" ||
+    workType === "murs" ||
+    workType === "plancher"
+  ) {
     return (WORK_TYPE_LABELS[workType] || workType) + zoneLabel + " — " + valeur + " m² : prime estimée " + formatEuros(prime) + ".";
   }
   return (WORK_TYPE_LABELS[workType] || workType) + zoneLabel + " : prime estimée " + formatEuros(prime) + ".";
@@ -1541,7 +1169,7 @@ form.addEventListener("submit", function (e) {
       ceeBloquee,
       housingTypeVal,
       heatingBeforeVal,
-      surfaceARenover,
+      surfaceARenover: surfaceRenover,
       postal,
     });
     resultCEEAmount.textContent =
