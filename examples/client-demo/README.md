@@ -4,7 +4,7 @@
 
 | Fichier | Usage |
 |---------|--------|
-| **`snippet-cdn.html`** | Fragment `<head>` + scripts en bas : surcharge `SIMULATOR_BRAND`, même ordre que la prod (`BRAND.md`) |
+| **`snippet-cdn.html`** | Fragment `<head>` + scripts en bas : surcharge `SIMULATOR_BRAND`, même ordre que la prod (`BRAND.md`, arborescence `css/`, `js/`) |
 | **`iframe-demo.html`** | Page minimale : iframe vers le simulateur déjà déployé (chemin relatif **dev** depuis ce dépôt) |
 
 Pour tester **`iframe-demo.html`** : depuis la racine du repo, `npx serve`, puis ouvrir  

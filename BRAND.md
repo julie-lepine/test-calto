@@ -1,19 +1,19 @@
 # Personnalisation marque blanche
 
-Le simulateur peut être déployé pour un client sans modifier la logique métier (`cee-calculator.js`, `app.js`). Le graphisme passe par **`brand-config.js`** (variables `--brand-*` sur `<html>`) et les champs optionnels titre, logo, CTA et textes.
+Le simulateur peut être déployé pour un client sans modifier la logique métier (`js/calculators/`, `js/app.js`). Le graphisme passe par **`js/brand/brand-config.js`** (variables `--brand-*` sur `<html>`) et les champs optionnels titre, logo, CTA et textes.
 
 ## Ordre de chargement recommandé
 
-1. Dans le `<head>` : **`styles.css`**, puis la librairie **DOMPurify** (CDN), puis **`brand-config.js`** — le sous-titre en HTML est sanitizé avant injection.
-2. Dans le pied de page (ou après le DOM métier) : **`cee-calculator.js`**, puis **`app.js`**.
+1. Dans le `<head>` : **`css/styles.css`**, puis la librairie **DOMPurify** (CDN), puis **`js/brand/brand-config.js`** — le sous-titre en HTML est sanitizé avant injection.
+2. Dans le pied de page (ou après le DOM métier) : **`js/lead/lead-email-layout.js`**, **`js/lead/lead-submit.js`**, **`js/calculators/cee-calculator.js`**, puis **`js/app.js`**.
 3. **Une seule** inclusion de `brand-config.js`.
 
-Pour surcharger sans éditer `brand-config.js`, déclarez `window.SIMULATOR_BRAND` **avant** le script `brand-config.js` (inline ou fichier dédié chargé avant). Les clés absentes ou à `undefined` ne remplacent pas les défauts ; `null` ou `""` écrase volontairement (ex. texte vide, désactivation des polices).
+Pour surcharger sans éditer `js/brand/brand-config.js`, déclarez `window.SIMULATOR_BRAND` **avant** ce script (inline ou fichier dédié chargé avant). Les clés absentes ou à `undefined` ne remplacent pas les défauts ; `null` ou `""` écrase volontairement (ex. texte vide, désactivation des polices).
 
 ## Exemple de surcharge dans le `<head>`
 
 ```html
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="css/styles.css" />
 
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.2/dist/purify.min.js" crossorigin="anonymous"></script>
 
@@ -44,7 +44,11 @@ Pour surcharger sans éditer `brand-config.js`, déclarez `window.SIMULATOR_BRAN
     },
   };
 </script>
-<script src="brand-config.js"></script>
+<script src="js/brand/brand-config.js"></script>
+<script src="js/lead/lead-email-layout.js"></script>
+<script src="js/lead/lead-submit.js"></script>
+<script src="js/calculators/cee-calculator.js"></script>
+<script src="js/app.js"></script>
 ```
 
 ### Champs JS (texte / lien / logo)
@@ -60,6 +64,11 @@ Pour surcharger sans éditer `brand-config.js`, déclarez `window.SIMULATOR_BRAN
 | `logoUrl`          | `src` de `#brand-logo` ; masque `#brand-logo-wrap` si vide.          |
 | `logoAlt`, `brandHomeUrl` | Accessibilité et lien sur le logo.                            |
 | `outlineCtaLabel`, `outlineCtaHref` | Bouton lien en-tête (`#brand-bar-outline`) ; masqué si `href` vide. |
+| `leadNotificationEmail` | Destinataire des leads (e-mail de notification). |
+| `leadEmailSubjectPrefix` | Préfixe d’objet (voir `lead-email-layout.js`). |
+| `leadSubmitEndpoint` | POST JSON optionnel ; sinon envoi via [FormSubmit](https://formsubmit.co) vers `leadNotificationEmail`. |
+| `leadFormTitle`, `leadFormIntro`, `leadConsentLabel`, `leadSubmitButtonLabel` | Textes du formulaire lead (`#lead-panel`). |
+| `leadConsentBlockedTitle`, `leadConsentBlockedText` | Page affichée si la case recontact n’est pas cochée (`#lead-consent-blocked-panel`). |
 | `fontStylesheetHref` | URL d’une feuille de polices (ex. lien Google Fonts `css2?...`). Chaîne vide : aucun chargement automatique. |
 
 Les textes par défaut (titre d’onglet, h1, sous-titre, pied de page, disclaimer) sont définis dans **`defaults`** de `brand-config.js` et réappliqués au chargement.
@@ -150,6 +159,6 @@ Pour un client, soit vous surchargez depuis le HTML comme ci-dessus, soit vous d
 
 ## Page de test locale
 
-Fichier **`test-brand.html`** : scénarios `?case=passthrough` (défaut), `css-vars-only`, `no-remote-font`, `sanitize-subtitle` — à ouvrir via un serveur HTTP local si besoin (chemins relatifs vers `styles.css` et `brand-config.js`).
+Fichier **`test-brand.html`** : scénarios `?case=passthrough` (défaut), `css-vars-only`, `no-remote-font`, `sanitize-subtitle` — à ouvrir via un serveur HTTP local si besoin (chemins vers `css/styles.css` et `js/brand/brand-config.js`).
 
 **Exemples partenaires** (snippet CDN, iframe) : dossier **`examples/client-demo/`**. Aperçu projet : **`README.md`** à la racine.

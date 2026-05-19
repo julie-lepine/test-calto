@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Simulateur de primes travaux — PPF</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="css/styles.css" />
   <!-- Sanitize headerSubtitle (HTML limité) — charger avant brand-config.js -->
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.2/dist/purify.min.js" crossorigin="anonymous"></script>
   <!-- Thème (--brand-*). Optionnel : window.SIMULATOR_BRAND avant ce script (voir BRAND.md). -->
-  <script src="brand-config.js"></script>
+  <script src="js/brand/brand-config.js"></script>
 </head>
 <body>
   <header class="site-header">
@@ -23,7 +23,7 @@
           target="_blank"
           href="https://ppf.fr/qui-sommes-nous/"
         >
-          Découvrir PPF
+          (re)Découvrir PPF
         </a>
       </div>
 
@@ -154,7 +154,7 @@
           <div class="field field--full projects-block">
             <span class="field__label">Projets de travaux</span>
             <p class="field__hint projects-block__intro">
-              Ajoutez un ou plusieurs lots. Chaque projet a son type de travaux et, si besoin, une surface ou un nombre d’ouvrants.
+              Ajoutez un ou plusieurs lots. Pour chaque projet, choisissez une famille de travaux puis le projet concerné (surface ou nombre si nécessaire).
             </p>
             <div id="projects-container" class="projects-container"></div>
             <span class="field__error" id="err-projects" hidden></span>
@@ -210,27 +210,99 @@
         </div>
       </form>
 
-      <section id="result-panel" class="card result" hidden aria-live="polite">
-        <h2 class="card__title">Résultat</h2>
-        <p class="result__blocage" id="result-blocage" hidden role="alert"></p>
-        <p class="result__category" id="result-category"></p>
-        <p class="result__situation" id="result-situation"></p>
-        <p class="result__amount">
-          <span class="result__amount-label">Montant total estimé MaPrimeRénov’</span>
-          <strong id="result-amount">—</strong>
+      <section id="lead-panel" class="card lead" hidden>
+        <h2 id="brand-lead-title" class="card__title">Votre estimation est prête</h2>
+        <p id="brand-lead-intro" class="lead__intro">
+          Complétez vos informations pour accéder au détail de vos aides.
         </p>
-        <p class="result__amount">
-          <span class="result__amount-label">Prime CEE estimée</span>
-          <strong id="result-cee-amount">—</strong>
-        </p>
-        <p class="result__breakdown-title">Détail MaPrimeRénov’ par produit / projet</p>
-        <div id="result-breakdown" class="result-breakdown" aria-label="Détail des primes par projet"></div>
-        <p class="result__breakdown-title">Détail CEE par produit / projet</p>
-        <div id="result-breakdown-cee" class="result-breakdown" aria-label="Détail des primes CEE par projet"></div>
-        <p id="brand-result-disclaimer" class="result__disclaimer">
-          Estimation indicative — primes MaPrimeRénov’ et CEE (plusieurs lots : total simplifié) — simulation non contractuelle
-        </p>
+        <form id="lead-form" class="lead__form" novalidate>
+          <div class="form__grid lead__grid">
+            <label class="field">
+              <span class="field__label">Nom</span>
+              <input type="text" name="leadLastName" id="leadLastName" autocomplete="family-name" required />
+              <span class="field__error" id="err-leadLastName" hidden></span>
+            </label>
+            <label class="field">
+              <span class="field__label">Prénom</span>
+              <input type="text" name="leadFirstName" id="leadFirstName" autocomplete="given-name" required />
+              <span class="field__error" id="err-leadFirstName" hidden></span>
+            </label>
+            <label class="field">
+              <span class="field__label">E-mail</span>
+              <input type="email" name="leadEmail" id="leadEmail" autocomplete="email" required />
+              <span class="field__error" id="err-leadEmail" hidden></span>
+            </label>
+            <label class="field">
+              <span class="field__label">Téléphone</span>
+              <input
+                type="tel"
+                name="leadPhone"
+                id="leadPhone"
+                autocomplete="tel"
+                inputmode="tel"
+                required
+              />
+              <span class="field__error" id="err-leadPhone" hidden></span>
+            </label>
+          </div>
+          <label class="field field--checkbox field--full">
+            <input type="checkbox" name="leadConsent" id="leadConsent" value="yes" />
+            <span id="brand-lead-consent-label">J’accepte d’être recontacté</span>
+          </label>
+          <p class="field__error lead__send-error" id="err-lead-send" hidden role="alert"></p>
+          <div class="form__actions lead__actions">
+            <button type="submit" class="btn btn--primary" id="lead-submit-btn">Afficher mes résultats</button>
+            <button type="button" class="btn btn--secondary" id="lead-back-btn">Modifier ma simulation</button>
+          </div>
+        </form>
       </section>
+
+      <section id="lead-consent-blocked-panel" class="card lead lead--blocked" hidden>
+        <h2 id="brand-lead-blocked-title" class="card__title">Résultats non disponibles</h2>
+        <p id="brand-lead-blocked-text" class="lead__intro">
+          Sans votre accord pour être recontacté, nous ne pouvons pas vous présenter le détail de votre
+          estimation de primes. Cochez la case sur le formulaire précédent pour accéder à vos résultats.
+        </p>
+        <div class="form__actions lead__actions">
+          <button type="button" class="btn btn--primary" id="lead-consent-back-btn">
+            Revenir au formulaire
+          </button>
+          <button type="button" class="btn btn--secondary" id="lead-consent-edit-sim-btn">
+            Modifier ma simulation
+          </button>
+        </div>
+      </section>
+
+      <section id="result-panel" class="card result" hidden aria-live="polite">
+        <h2 class="card__title">Résultats</h2>
+        <p class="result__blocage" id="result-blocage" hidden role="alert"></p>
+        <ul class="result__summary" aria-label="Récapitulatif de votre simulation">
+          <li id="result-category"></li>
+          <li id="result-surface"></li>
+          <li id="result-construction"></li>
+        </ul>
+        <div class="result__card">
+          <div class="result__total-wrap">
+            <p class="result__total-label">Montant total de vos primes :</p>
+            <p class="result__total-amount" id="result-total-amount">—</p>
+          </div>
+          <hr class="result__divider" />
+          <h3 class="result__details-title">Détails par projet :</h3>
+          <div
+            id="result-breakdown"
+            class="result-breakdown"
+            aria-label="Détail des primes MaPrimeRénov’ et CEE par projet"
+          ></div>
+          <p id="brand-result-disclaimer" class="result__disclaimer">
+            Les montants affichés sont indicatifs et calculés à partir des critères moyens retenus pour cette
+            simulation. Ils ne constituent en aucun cas un engagement contractuel.
+          </p>
+        </div>
+      </section>
+
+      <div class="form__actions result__actions" id="result-back-wrap" hidden>
+        <button type="button" class="btn btn--secondary" id="result-back-btn">Retour au simulateur</button>
+      </div>
     </main>
 
     <footer class="footer">
@@ -240,7 +312,9 @@
     </footer>
   </div>
 
-  <script src="cee-calculator.js"></script>
-  <script src="app.js"></script>
+  <script src="js/lead/lead-email-layout.js"></script>
+  <script src="js/lead/lead-submit.js"></script>
+  <script src="js/calculators/cee-calculator.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

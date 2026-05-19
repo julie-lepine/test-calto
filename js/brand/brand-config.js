@@ -13,6 +13,7 @@
     "--brand-primary-muted": "#FBBA00a8",
     "--brand-primary-hover": "#FBBA00",
     "--brand-primary-soft": "#FBBA0038",
+    "--brand-secondary": "#000000",
     "--brand-on-primary": "#0a0f0d",
     "--brand-surface": "#ffffff",
     "--brand-text": "#000000",
@@ -76,13 +77,28 @@
     footerText:
       "Total = somme des projets saisis ; en réalité CEE et MaPrimeRénov’ (parcours accompagné, cumuls, plafonds globaux, etc.) peuvent différer. Données à titre indicatif.",
     resultDisclaimer:
-      "Estimation indicative — primes MaPrimeRénov’ et CEE (plusieurs lots : total simplifié) — simulation non contractuelle",
+      "Les montants affichés sont indicatifs et calculés à partir des critères moyens retenus pour cette simulation. Ils ne constituent en aucun cas un engagement contractuel.",
 
     logoUrl: "assets/PPF-LOGO.png",
     logoAlt: "PPF",
     brandHomeUrl: "https://ppf.fr/qui-sommes-nous/",
-    outlineCtaLabel: "Découvrir PPF",
-    outlineCtaHref: "https://ppf.fr/qui-sommes-nous/"
+    outlineCtaLabel: "(re)Découvrir PPF",
+    outlineCtaHref: "https://ppf.fr/qui-sommes-nous/",
+
+    /** Destinataire des notifications lead (FormSubmit ou leadSubmitEndpoint). */
+    leadNotificationEmail: "julie.lepine@evalutoo.fr",
+    /** Préfixe de l’objet e-mail (voir lead-email-layout.js). */
+    leadEmailSubjectPrefix: "Nouveau lead simulateur PPF",
+    /** POST JSON optionnel (sinon FormSubmit vers leadNotificationEmail). */
+    leadSubmitEndpoint: "",
+
+    leadFormTitle: "Votre estimation est prête",
+    leadFormIntro: "Complétez vos informations pour accéder au détail de vos aides.",
+    leadConsentLabel: "J’accepte d’être recontacté",
+    leadSubmitButtonLabel: "Afficher mes résultats",
+    leadConsentBlockedTitle: "Résultats non disponibles",
+    leadConsentBlockedText:
+      "Sans votre accord pour être recontacté, nous ne pouvons pas vous présenter le détail de votre estimation de primes. Cochez la case sur le formulaire précédent pour accéder à vos résultats.",
   };
 
   function omitUndefined(raw) {
@@ -264,6 +280,8 @@
             link.appendChild(logo);
           }
           link.href = b.brandHomeUrl;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
           link.setAttribute("aria-label", b.logoAlt ? String(b.logoAlt) : "Accueil");
           link.removeAttribute("aria-hidden");
         } else if (existingLink && existingLink.contains(logo)) {
@@ -277,6 +295,31 @@
           orphanLink.replaceWith(logo);
         }
       }
+    }
+
+    var leadTitle = document.getElementById("brand-lead-title");
+    if (leadTitle && b.leadFormTitle != null) {
+      leadTitle.textContent = String(b.leadFormTitle);
+    }
+    var leadIntro = document.getElementById("brand-lead-intro");
+    if (leadIntro && b.leadFormIntro != null) {
+      leadIntro.textContent = String(b.leadFormIntro);
+    }
+    var leadConsent = document.getElementById("brand-lead-consent-label");
+    if (leadConsent && b.leadConsentLabel != null) {
+      leadConsent.textContent = String(b.leadConsentLabel);
+    }
+    var leadSubmitBtn = document.getElementById("lead-submit-btn");
+    if (leadSubmitBtn && b.leadSubmitButtonLabel != null) {
+      leadSubmitBtn.textContent = String(b.leadSubmitButtonLabel);
+    }
+    var leadBlockedTitle = document.getElementById("brand-lead-blocked-title");
+    if (leadBlockedTitle && b.leadConsentBlockedTitle != null) {
+      leadBlockedTitle.textContent = String(b.leadConsentBlockedTitle);
+    }
+    var leadBlockedText = document.getElementById("brand-lead-blocked-text");
+    if (leadBlockedText && b.leadConsentBlockedText != null) {
+      leadBlockedText.textContent = String(b.leadConsentBlockedText);
     }
   }
 

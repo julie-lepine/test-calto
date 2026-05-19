@@ -2,7 +2,7 @@
  * Simulateur de primes rénovation énergétique (frontend pur)
  * ---------------------------------------------------------------------------
  * Ce fichier assemble l’interface : barèmes MPR et plafonds dans ce fichier ;
- * calculs CEE dans `cee-calculator.js` (chargé avant ce script).
+ * calculs CEE dans `js/calculators/cee-calculator.js` (chargé avant ce script).
  * 1. Plafonds et catégorie de revenus (Île-de-France / autres régions)
  * 2. Code postal → région (Île-de-France vs autres)
  * 3. Calcul MaPrimeRénov’ (montant d’aide) et branchement calculateCEEPrime (CEE)
@@ -164,6 +164,49 @@ const WORK_TYPE_LABELS = {
   "vmc simple flux": "VMC simple flux",
 };
 
+/** Familles de travaux → valeurs `option` du sélecteur maître (entonnoir projet). */
+const WORK_TYPE_CATEGORIES = [
+  {
+    id: "isolations",
+    label: "Isolations",
+    workTypes: ["rampants", "toiture terrasses", "combles perdus", "murs", "plancher", "menuiseries"],
+  },
+  {
+    id: "chauffage",
+    label: "Chauffage",
+    workTypes: [
+      "chauffe eau thermo",
+      "pac air eau",
+      "pac geo",
+      "chauffe eau solaire individuel",
+      "chauffe eau solaire combiné",
+      "chaudieres biomasse",
+      "pac air air",
+      "cuve fioul",
+    ],
+  },
+  {
+    id: "foyer-bois",
+    label: "Foyer & bois",
+    workTypes: ["poele buches", "poele granules", "foyer ferme"],
+  },
+  {
+    id: "ventilation",
+    label: "Ventilation",
+    workTypes: ["vmc simple flux", "double flux"],
+  },
+];
+
+function getWorkTypeCategoryById(categoryId) {
+  return WORK_TYPE_CATEGORIES.find(function (c) {
+    return c.id === categoryId;
+  });
+}
+
+function getWorkTypeDisplayLabel(value) {
+  return WORK_TYPE_LABELS[value] || value;
+}
+
 /** Âge minimum du logement (années) pour être pris en compte comme éligible MaPrimeRénov’ dans ce simulateur. */
 const MAPRIME_AGE_MIN_LOGEMENT = 15;
 
@@ -171,6 +214,22 @@ const MAPRIME_AGE_MIN_LOGEMENT = 15;
 const MAPRIME_STATUTS_EXCLUS = {
   autre: "Autre statut : non éligible à MaPrimeRénov’.",
 };
+
+const HOUSING_LABELS = { maison: "Maison", appartement: "Appartement" };
+const STATUS_LABELS = {
+  occupant: "Propriétaire occupant",
+  bailleur: "Propriétaire bailleur",
+  autre: "Autre statut",
+};
+const HEATING_LABELS = {
+  bois: "Bois",
+  electricite: "Électricité",
+  fioul: "Fioul",
+  gaz: "Gaz",
+};
+
+/** @type {object|null} Contexte simulation + résultats après « Lancer la simulation ». */
+let pendingSimulation = null;
 
 /**
  * @param {number} anneeConstruction
@@ -342,14 +401,23 @@ const addProjectBtn = document.getElementById("add-project-btn");
 const progressEl = document.getElementById("progress");
 const progressBar = document.getElementById("progress-bar");
 const submitBtn = document.getElementById("submit-btn");
+const leadPanel = document.getElementById("lead-panel");
+const leadForm = document.getElementById("lead-form");
+const leadSubmitBtn = document.getElementById("lead-submit-btn");
+const leadBackBtn = document.getElementById("lead-back-btn");
+const leadConsentBlockedPanel = document.getElementById("lead-consent-blocked-panel");
+const leadConsentBackBtn = document.getElementById("lead-consent-back-btn");
+const leadConsentEditSimBtn = document.getElementById("lead-consent-edit-sim-btn");
+const leadSendError = document.getElementById("err-lead-send");
 const resultPanel = document.getElementById("result-panel");
+const resultBackWrap = document.getElementById("result-back-wrap");
+const resultBackBtn = document.getElementById("result-back-btn");
 const resultCategory = document.getElementById("result-category");
-const resultAmount = document.getElementById("result-amount");
-const resultCEEAmount = document.getElementById("result-cee-amount");
+const resultSurface = document.getElementById("result-surface");
+const resultConstruction = document.getElementById("result-construction");
+const resultTotalAmount = document.getElementById("result-total-amount");
 const resultBlocage = document.getElementById("result-blocage");
-const resultSituation = document.getElementById("result-situation");
 const resultBreakdown = document.getElementById("result-breakdown");
-const resultBreakdownCEE = document.getElementById("result-breakdown-cee");
 const postalInput = document.getElementById("postalCode");
 const regionInput = document.getElementById("region");
 const householdInput = document.getElementById("household");
@@ -390,6 +458,8 @@ const ERROR_FIELD_IDS = [
   "heatingBefore",
 ];
 
+const LEAD_ERROR_FIELD_IDS = ["leadLastName", "leadFirstName", "leadEmail", "leadPhone"];
+
 function clearFieldErrors() {
   ERROR_FIELD_IDS.forEach(function (id) {
     const err = document.getElementById("err-" + id);
@@ -409,6 +479,19 @@ function clearFieldErrors() {
     clearRowProjectError(row, "workType");
     clearRowProjectError(row, "quantity");
   });
+  LEAD_ERROR_FIELD_IDS.forEach(function (id) {
+    const err = document.getElementById("err-" + id);
+    if (err) {
+      err.textContent = "";
+      err.hidden = true;
+    }
+    const el = document.getElementById(id);
+    if (el) el.removeAttribute("aria-invalid");
+  });
+  if (leadSendError) {
+    leadSendError.textContent = "";
+    leadSendError.hidden = true;
+  }
 }
 
 function showFieldError(fieldId, message) {
@@ -421,12 +504,21 @@ function showFieldError(fieldId, message) {
   if (el) el.setAttribute("aria-invalid", "true");
 }
 
+function clearProjectFunnelInvalid(row) {
+  row.querySelectorAll(".project-funnel__pill[aria-invalid]").forEach(function (btn) {
+    btn.removeAttribute("aria-invalid");
+  });
+}
+
 function clearRowProjectError(row, field) {
   const sel = field === "workType" ? ".project-err-workType" : ".project-err-quantity";
   const err = row.querySelector(sel);
   if (err) {
     err.textContent = "";
     err.hidden = true;
+  }
+  if (field === "workType") {
+    clearProjectFunnelInvalid(row);
   }
   const input =
     field === "workType" ? row.querySelector(".project-work-type") : row.querySelector(".project-quantity");
@@ -439,6 +531,14 @@ function showProjectRowError(row, field, message) {
   if (err) {
     err.textContent = message;
     err.hidden = false;
+  }
+  if (field === "workType") {
+    const categoryId = row.dataset.selectedCategory;
+    const focusTarget = categoryId
+      ? row.querySelector(".project-funnel__type-btn:not([aria-pressed='true'])") ||
+        row.querySelector(".project-funnel__type-btn")
+      : row.querySelector(".project-funnel__category-btn");
+    if (focusTarget) focusTarget.setAttribute("aria-invalid", "true");
   }
   const input =
     field === "workType" ? row.querySelector(".project-work-type") : row.querySelector(".project-quantity");
@@ -453,7 +553,8 @@ function showProjectsBlockError(message) {
 }
 
 function focusFirstInvalidField() {
-  const formEl = document.getElementById("simulation-form");
+  const formEl =
+    leadPanel && !leadPanel.hidden && leadForm ? leadForm : document.getElementById("simulation-form");
   const errors = formEl.querySelectorAll(".field__error:not([hidden])");
   if (!errors.length) return;
   const err = errors[0];
@@ -465,7 +566,11 @@ function focusFirstInvalidField() {
   const row = err.closest(".project-row");
   if (row) {
     if (err.classList.contains("project-err-workType")) {
-      row.querySelector(".project-work-type")?.focus({ preventScroll: true });
+      const categoryId = row.dataset.selectedCategory;
+      const funnelFocus = categoryId
+        ? row.querySelector(".project-funnel__type-btn") || row.querySelector(".project-funnel__category-btn")
+        : row.querySelector(".project-funnel__category-btn");
+      funnelFocus?.focus({ preventScroll: true });
     } else {
       row.querySelector(".project-quantity")?.focus({ preventScroll: true });
     }
@@ -516,51 +621,44 @@ function updateQuantityForRow(row) {
   const kind = getWorkTypeSaisie(workValue);
   const wrap = row.querySelector(".project-quantity-wrap");
   const qtyInput = row.querySelector(".project-quantity");
-  const qtyLabel = row.querySelector(".project-quantity-label");
   const qtyHint = row.querySelector(".project-quantity-hint");
-  const hasWorkType = Boolean(workValue);
-  const isForfaitSansSaisie = kind === null;
+  const needsQuantity = Boolean(workValue) && kind !== null;
 
-  if (!hasWorkType) {
+  function hideQuantityField() {
     wrap.hidden = true;
     wrap.setAttribute("aria-hidden", "true");
+    qtyInput.hidden = true;
     qtyInput.required = false;
     qtyInput.disabled = true;
-    qtyInput.hidden = false;
     qtyInput.value = "";
+    qtyInput.removeAttribute("aria-label");
+    qtyInput.placeholder = "";
     qtyHint.textContent = "";
-    qtyLabel.textContent = "—";
     clearRowProjectError(row, "quantity");
     qtyInput.removeAttribute("aria-invalid");
+  }
+
+  if (!needsQuantity) {
+    hideQuantityField();
     return;
   }
 
   wrap.hidden = false;
   wrap.setAttribute("aria-hidden", "false");
-
-  qtyInput.required = !isForfaitSansSaisie;
-  qtyInput.disabled = isForfaitSansSaisie;
-  qtyInput.hidden = isForfaitSansSaisie;
-
-  if (isForfaitSansSaisie) {
-    qtyLabel.textContent = "Forfait";
-    qtyHint.textContent = "Montant forfaitaire (pas de saisie nécessaire).";
-    qtyInput.value = "";
-    clearRowProjectError(row, "quantity");
-    qtyInput.removeAttribute("aria-invalid");
-    return;
-  }
-
+  qtyInput.hidden = false;
+  qtyInput.required = true;
+  qtyInput.disabled = false;
   qtyInput.min = "1";
   qtyInput.step = "1";
+
   if (kind === "surface_m2") {
-    qtyLabel.textContent = "Surface (m²)";
+    qtyInput.setAttribute("aria-label", "Surface en m²");
     qtyHint.textContent = "";
-    qtyInput.placeholder = "Ex. 95";
+    qtyInput.placeholder = "Surface en m² — ex. 95";
   } else {
-    qtyLabel.textContent = "Nombre";
+    qtyInput.setAttribute("aria-label", "Nombre d’ouvrants");
     qtyHint.textContent = "Nombre de fenêtres et porte-fenêtres remplacées.";
-    qtyInput.placeholder = "Ex. 8";
+    qtyInput.placeholder = "Nombre d’ouvrants — ex. 8";
   }
 }
 
@@ -576,6 +674,76 @@ function updateProjectChrome() {
       btn.disabled = !multi;
     }
   });
+}
+
+function renderProjectTypeButtons(row, categoryId) {
+  const cat = getWorkTypeCategoryById(categoryId);
+  const grid = row.querySelector(".project-funnel__types-grid");
+  if (!grid || !cat) return;
+  grid.replaceChildren();
+  cat.workTypes.forEach(function (workValue) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "project-funnel__pill project-funnel__type-btn";
+    btn.textContent = getWorkTypeDisplayLabel(workValue);
+    btn.dataset.workType = workValue;
+    btn.setAttribute("aria-pressed", "false");
+    btn.addEventListener("click", function () {
+      selectProjectWorkType(row, workValue);
+    });
+    grid.appendChild(btn);
+  });
+}
+
+function selectProjectCategory(row, categoryId) {
+  const cat = getWorkTypeCategoryById(categoryId);
+  if (!cat) return;
+
+  row.dataset.selectedCategory = categoryId;
+  clearRowProjectError(row, "workType");
+
+  row.querySelectorAll(".project-funnel__category-btn").forEach(function (btn) {
+    const selected = btn.dataset.category === categoryId;
+    btn.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+
+  const workSel = row.querySelector(".project-work-type");
+  if (workSel) {
+    workSel.value = "";
+    workSel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  row.querySelectorAll(".project-funnel__type-btn").forEach(function (btn) {
+    btn.setAttribute("aria-pressed", "false");
+  });
+
+  renderProjectTypeButtons(row, categoryId);
+
+  const typesPanel = row.querySelector(".project-funnel__types");
+  if (typesPanel) {
+    typesPanel.hidden = false;
+    typesPanel.setAttribute("aria-hidden", "false");
+  }
+
+  updateQuantityForRow(row);
+}
+
+function selectProjectWorkType(row, workValue) {
+  const workSel = row.querySelector(".project-work-type");
+  if (!workSel || workSel.value === workValue) {
+    if (workSel && workSel.value === workValue) updateQuantityForRow(row);
+    return;
+  }
+
+  workSel.value = workValue;
+  clearRowProjectError(row, "workType");
+
+  row.querySelectorAll(".project-funnel__type-btn").forEach(function (btn) {
+    btn.setAttribute("aria-pressed", btn.dataset.workType === workValue ? "true" : "false");
+  });
+
+  workSel.dispatchEvent(new Event("change", { bubbles: true }));
+  updateQuantityForRow(row);
 }
 
 function createProjectRow() {
@@ -600,34 +768,76 @@ function createProjectRow() {
   head.appendChild(title);
   head.appendChild(removeBtn);
 
-  const workLabel = document.createElement("label");
-  workLabel.className = "field field--full";
-  const workLabelText = document.createElement("span");
-  workLabelText.className = "field__label";
-  workLabelText.textContent = "Type de travaux";
+  const funnel = document.createElement("div");
+  funnel.className = "field field--full project-funnel";
+
+  const catLabel = document.createElement("span");
+  catLabel.className = "field__label";
+  catLabel.textContent = "Famille de travaux";
+
+  const catGroup = document.createElement("div");
+  catGroup.className = "project-funnel__categories";
+  catGroup.setAttribute("role", "group");
+  catGroup.setAttribute("aria-label", "Famille de travaux");
+
+  WORK_TYPE_CATEGORIES.forEach(function (cat) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "project-funnel__pill project-funnel__category-btn";
+    btn.textContent = cat.label;
+    btn.dataset.category = cat.id;
+    btn.setAttribute("aria-pressed", "false");
+    btn.addEventListener("click", function () {
+      selectProjectCategory(row, cat.id);
+    });
+    catGroup.appendChild(btn);
+  });
+
+  const typesPanel = document.createElement("div");
+  typesPanel.className = "project-funnel__types";
+  typesPanel.hidden = true;
+  typesPanel.setAttribute("aria-hidden", "true");
+
+  const typesLabel = document.createElement("span");
+  typesLabel.className = "field__label";
+  typesLabel.textContent = "Projet concerné";
+
+  const typesGrid = document.createElement("div");
+  typesGrid.className = "project-funnel__types-grid";
+  typesGrid.setAttribute("role", "group");
+  typesGrid.setAttribute("aria-label", "Projet concerné");
+
+  typesPanel.appendChild(typesLabel);
+  typesPanel.appendChild(typesGrid);
+
   const workSel = workTypeMaster.cloneNode(true);
   workSel.disabled = false;
-  workSel.hidden = false;
+  workSel.hidden = true;
   workSel.removeAttribute("id");
-  workSel.removeAttribute("aria-hidden");
-  workSel.removeAttribute("tabindex");
+  workSel.setAttribute("aria-hidden", "true");
+  workSel.setAttribute("tabindex", "-1");
   workSel.name = "workType[]";
-  workSel.className = "project-work-type";
+  workSel.className = "project-work-type work-type-master";
   workSel.required = true;
   workSel.value = "";
+
   const errWork = document.createElement("span");
   errWork.className = "field__error project-err-workType";
   errWork.hidden = true;
-  workLabel.appendChild(workLabelText);
-  workLabel.appendChild(workSel);
-  workLabel.appendChild(errWork);
 
-  const qtyWrap = document.createElement("label");
+  funnel.appendChild(catLabel);
+  funnel.appendChild(catGroup);
+  funnel.appendChild(typesPanel);
+  funnel.appendChild(workSel);
+  funnel.appendChild(errWork);
+
+  workSel.addEventListener("change", function () {
+    updateQuantityForRow(row);
+  });
+
+  const qtyWrap = document.createElement("div");
   qtyWrap.className = "field field--full project-quantity-wrap";
   qtyWrap.hidden = true;
-  const qtyLab = document.createElement("span");
-  qtyLab.className = "field__label project-quantity-label";
-  qtyLab.textContent = "—";
   const qtyInput = document.createElement("input");
   qtyInput.type = "number";
   qtyInput.className = "project-quantity";
@@ -639,17 +849,12 @@ function createProjectRow() {
   errQty.hidden = true;
   const qtyHint = document.createElement("span");
   qtyHint.className = "field__hint project-quantity-hint";
-  qtyWrap.appendChild(qtyLab);
   qtyWrap.appendChild(qtyInput);
   qtyWrap.appendChild(errQty);
   qtyWrap.appendChild(qtyHint);
 
-  workSel.addEventListener("change", function () {
-    updateQuantityForRow(row);
-  });
-
   row.appendChild(head);
-  row.appendChild(workLabel);
+  row.appendChild(funnel);
   row.appendChild(qtyWrap);
 
   return row;
@@ -718,11 +923,11 @@ function updateIncomeSelectOptions() {
     },
     {
       value: "modeste",
-      label: "Plus de " + formatEuros(plafondTM) + " et jusqu’à " + formatEuros(plafondM),
+      label: "De " + formatEuros(plafondTM) + " à " + formatEuros(plafondM),
     },
     {
       value: "intermediaire",
-      label: "Plus de " + formatEuros(plafondM) + " et jusqu’à " + formatEuros(plafondI),
+      label: "De " + formatEuros(plafondM) + " à " + formatEuros(plafondI),
     },
     {
       value: "superieur",
@@ -800,155 +1005,136 @@ function formatSurfaceM2(n) {
   }).format(n);
 }
 
-/**
- * Affiche le détail des primes par produit / projet.
- * @param {{ workType: string, valeur: number }[]} projets
- * @param {'tres_modeste'|'modeste'|'intermediaire'|'superieur'} categorie
- * @param {{ maprimeBloquee: boolean }} opts
- */
-function renderResultBreakdown(projets, categorie, opts) {
-  const maprimeBloquee = opts.maprimeBloquee;
-  resultBreakdown.textContent = "";
-
-  projets.forEach(function (p, index) {
-    const aide = calculerAideMPR(categorie, p.workType, p.valeur);
-    const nomProduit = WORK_TYPE_LABELS[p.workType] || p.workType;
-
-    const article = document.createElement("article");
-    article.className = "result-product";
-
-    const row = document.createElement("div");
-    row.className = "result-product__row";
-
-    const nameEl = document.createElement("span");
-    nameEl.className = "result-product__name";
-    nameEl.textContent = "Projet " + (index + 1) + " — " + nomProduit;
-
-    const amtEl = document.createElement("span");
-    amtEl.className = "result-product__amount";
-    if (maprimeBloquee) {
-      amtEl.classList.add("result-product__amount--zero");
-      amtEl.textContent = "0 €";
-    } else if (!aide.eligible) {
-      amtEl.classList.add("result-product__amount--zero");
-      amtEl.textContent = "Non éligible";
-    } else {
-      amtEl.textContent = formatEuros(aide.montant);
-    }
-
-    row.appendChild(nameEl);
-    row.appendChild(amtEl);
-    article.appendChild(row);
-
-    const det = document.createElement("p");
-    det.className = "result-product__detail";
-    let txt = aide.detail;
-    if (maprimeBloquee) {
-      txt +=
-        " Montant non dû : votre situation (statut ou ancienneté du logement) exclut MaPrimeRénov’ dans cette simulation.";
-    }
-    det.textContent = txt;
-    article.appendChild(det);
-
-    resultBreakdown.appendChild(article);
-  });
+function getMaprimeLineForProject(p, categorie, maprimeBloquee) {
+  if (maprimeBloquee) {
+    return { text: "Non éligible", amount: 0, eligible: false };
+  }
+  const aide = calculerAideMPR(categorie, p.workType, p.valeur);
+  if (!aide.eligible) {
+    return { text: "Non éligible", amount: 0, eligible: false };
+  }
+  return { text: formatEuros(aide.montant), amount: aide.montant, eligible: true };
 }
 
-function renderCEEBreakdown(projets, categorie, opts) {
-  const {
-    ceeBloquee,
-    housingTypeVal,
-    heatingBeforeVal,
-    surfaceARenover,
-    postal,
-  } = opts;
+function getCEELineForProject(p, categorie, opts) {
+  const { ceeBloquee, housingTypeVal, heatingBeforeVal, surfaceARenover, postal } = opts;
+  if (ceeBloquee) {
+    return { text: "Non éligible", amount: 0, eligible: false };
+  }
+  if (!getZoneCEE(postal)) {
+    return { text: "Non éligible", amount: 0, eligible: false };
+  }
+  const needsSurfaceForCEE =
+    p.workType === "double flux" ||
+    p.workType === "vmc simple flux" ||
+    p.workType === "pac air air" ||
+    p.workType === "pac air eau";
+  const surface_m2ForCEE = needsSurfaceForCEE ? surfaceARenover : undefined;
+  const valeurForCEE = needsSurfaceForCEE ? 1 : p.valeur || 1;
+  const prime = calculateCEEPrime(p.workType, {
+    postalCode: postal,
+    housingType: housingTypeVal,
+    heatingBefore: heatingBeforeVal,
+    surface_m2: surface_m2ForCEE,
+    valeur: valeurForCEE,
+    categorieRevenus: categorie,
+  });
+  if (prime === null || prime <= 0) {
+    return { text: "Non éligible", amount: 0, eligible: false };
+  }
+  return { text: formatEuros(prime), amount: prime, eligible: true };
+}
 
-  const geographical_area = getZoneCEE(postal);
+function appendResultLine(container, label, line) {
+  const row = document.createElement("div");
+  row.className = "result-line";
+  const lab = document.createElement("span");
+  lab.className = "result-line__label";
+  lab.textContent = label;
+  const val = document.createElement("strong");
+  val.className = "result-line__value";
+  val.textContent = line.text;
+  if (!line.eligible) {
+    val.classList.add("result-line__value--ineligible");
+  }
+  row.appendChild(lab);
+  row.appendChild(val);
+  container.appendChild(row);
+}
 
-  resultBreakdownCEE.textContent = "";
+function renderUnifiedResultBreakdown(projets, categorie, opts) {
+  const maprimeBloquee = opts.maprimeBloquee;
+  const ceeOpts = {
+    ceeBloquee: opts.ceeBloquee,
+    housingTypeVal: opts.housingTypeVal,
+    heatingBeforeVal: opts.heatingBeforeVal,
+    surfaceARenover: opts.surfaceARenover,
+    postal: opts.postal,
+  };
+
+  if (resultBreakdown) resultBreakdown.textContent = "";
 
   let totalPrime = 0;
+  let maprimeTotal = 0;
   let anyComputed = false;
+  let anyEligible = false;
 
-  projets.forEach(function (p, index) {
+  projets.forEach(function (p) {
     const nomProduit = WORK_TYPE_LABELS[p.workType] || p.workType;
+    const maprimeLine = getMaprimeLineForProject(p, categorie, maprimeBloquee);
+    const ceeLine = getCEELineForProject(p, categorie, ceeOpts);
+
+    if (maprimeLine.eligible) {
+      maprimeTotal += maprimeLine.amount;
+      anyEligible = true;
+    }
+    if (ceeLine.eligible) {
+      totalPrime += ceeLine.amount;
+      anyComputed = true;
+      anyEligible = true;
+    }
 
     const article = document.createElement("article");
-    article.className = "result-product";
+    article.className = "result-project";
 
-    const row = document.createElement("div");
-    row.className = "result-product__row";
+    const title = document.createElement("h4");
+    title.className = "result-project__title";
+    title.textContent = nomProduit + " :";
+    article.appendChild(title);
 
-    const nameEl = document.createElement("span");
-    nameEl.className = "result-product__name";
-    nameEl.textContent = "Projet " + (index + 1) + " — " + nomProduit;
+    const lines = document.createElement("div");
+    lines.className = "result-project__lines";
+    appendResultLine(lines, "MaPrimeRénov’", maprimeLine);
+    appendResultLine(lines, "CEE", ceeLine);
+    article.appendChild(lines);
 
-    const amtEl = document.createElement("span");
-    amtEl.className = "result-product__amount";
-
-    const det = document.createElement("p");
-    det.className = "result-product__detail";
-
-    if (ceeBloquee) {
-      amtEl.classList.add("result-product__amount--zero");
-      amtEl.textContent = "0 €";
-      det.textContent = "CEE non éligibles : logement de moins de 2 ans.";
-      row.appendChild(nameEl);
-      row.appendChild(amtEl);
-      article.appendChild(row);
-      article.appendChild(det);
-      resultBreakdownCEE.appendChild(article);
-      return;
-    }
-
-    if (!geographical_area) {
-      amtEl.classList.add("result-product__amount--zero");
-      amtEl.textContent = "Non éligible";
-      det.textContent = "CEE non simulées : zone CEE introuvable pour ce code postal.";
-      row.appendChild(nameEl);
-      row.appendChild(amtEl);
-      article.appendChild(row);
-      article.appendChild(det);
-      resultBreakdownCEE.appendChild(article);
-      return;
-    }
-
-    const needsSurfaceForCEE =
-      p.workType === "double flux" ||
-      p.workType === "vmc simple flux" ||
-      p.workType === "pac air air" ||
-      p.workType === "pac air eau";
-    const surface_m2ForCEE = needsSurfaceForCEE ? surfaceARenover : undefined;
-    const valeurForCEE = needsSurfaceForCEE ? 1 : (p.valeur || 1);
-
-    const prime = calculateCEEPrime(p.workType, {
-      postalCode: postal,
-      housingType: housingTypeVal,
-      heatingBefore: heatingBeforeVal,
-      surface_m2: surface_m2ForCEE,
-      valeur: valeurForCEE,
-      categorieRevenus: categorie,
-    });
-
-    if (prime === null || prime <= 0) {
-      amtEl.classList.add("result-product__amount--zero");
-      amtEl.textContent = "Non éligible";
-      det.textContent = "Ce type de travaux n'est pas couvert par le barème CEE dans ce simulateur.";
-    } else {
-      totalPrime += prime;
-      anyComputed = true;
-      amtEl.textContent = formatEuros(prime);
-      det.textContent = buildCEEDetailText(p.workType, prime, geographical_area, valeurForCEE, surface_m2ForCEE);
-    }
-
-    row.appendChild(nameEl);
-    row.appendChild(amtEl);
-    article.appendChild(row);
-    article.appendChild(det);
-    resultBreakdownCEE.appendChild(article);
+    if (resultBreakdown) resultBreakdown.appendChild(article);
   });
 
-  return { totalPrime, anyComputed };
+  return {
+    totalPrime: totalPrime,
+    anyComputed: anyComputed,
+    maprimeTotal: maprimeTotal,
+    anyEligible: anyEligible,
+  };
+}
+
+function computeCEETotals(projets, categorie, opts) {
+  let totalPrime = 0;
+  let anyComputed = false;
+  projets.forEach(function (p) {
+    const line = getCEELineForProject(p, categorie, opts);
+    if (line.eligible) {
+      totalPrime += line.amount;
+      anyComputed = true;
+    }
+  });
+  return { totalPrime: totalPrime, anyComputed: anyComputed };
+}
+
+/** Compatibilité : calcule les totaux CEE sans ré-afficher le détail. */
+function renderCEEBreakdown(projets, categorie, opts) {
+  return computeCEETotals(projets, categorie, opts);
 }
 
 /**
@@ -980,13 +1166,233 @@ function buildCEEDetailText(workType, prime, zone, valeur, surface_m2) {
   return (WORK_TYPE_LABELS[workType] || workType) + zoneLabel + " : prime estimée " + formatEuros(prime) + ".";
 }
 
+function getSelectLabel(selectId) {
+  const el = document.getElementById(selectId);
+  if (!el || el.selectedIndex < 0) return "";
+  const opt = el.options[el.selectedIndex];
+  return opt ? opt.textContent.trim() : "";
+}
 
-form.addEventListener("submit", function (e) {
-  e.preventDefault();
+/**
+ * @param {object} ctx
+ * @returns {object} Résultats calculés pour affichage et e-mail lead.
+ */
+function computeSimulationResults(ctx) {
+  const categorie = ctx.categorie;
+  const ageLogement = getAgeLogementAnnees(ctx.constructionYear);
+  const messagesBlocage = [];
+  let maprimeBloquee = false;
 
-  clearFieldErrors();
+  if (MAPRIME_STATUTS_EXCLUS[ctx.statusVal]) {
+    maprimeBloquee = true;
+    messagesBlocage.push(MAPRIME_STATUTS_EXCLUS[ctx.statusVal]);
+  }
+  if (ageLogement < MAPRIME_AGE_MIN_LOGEMENT) {
+    maprimeBloquee = true;
+    messagesBlocage.push(
+      "Logement d’environ " +
+        ageLogement +
+        " an" +
+        (ageLogement > 1 ? "s" : "") +
+        " (moins de " +
+        MAPRIME_AGE_MIN_LOGEMENT +
+        " ans) : non éligible à MaPrimeRénov’ dans ce scénario."
+    );
+  }
 
-  const data = new FormData(form);
+  const ceeBloquee = ageLogement < 2;
+  if (ceeBloquee) {
+    messagesBlocage.push("CEE non éligibles : logement de moins de 2 ans.");
+  }
+
+  let totalMontant = 0;
+  let anyEligible = false;
+
+  if (!maprimeBloquee) {
+    ctx.projets.forEach(function (p) {
+      const aide = calculerAideMPR(categorie, p.workType, p.valeur);
+      if (aide.eligible) {
+        totalMontant += aide.montant;
+        anyEligible = true;
+      }
+    });
+  }
+
+  return {
+    categorie,
+    ageLogement,
+    messagesBlocage,
+    maprimeBloquee,
+    ceeBloquee,
+    totalMontant,
+    anyEligible,
+  };
+}
+
+function applySimulationResultsToDom(ctx, results) {
+  const categorie = results.categorie;
+  const ageLogement = results.ageLogement;
+
+  resultPanel.hidden = false;
+
+  if (results.messagesBlocage.length) {
+    resultBlocage.textContent = results.messagesBlocage.join(" ");
+    resultBlocage.hidden = false;
+  } else {
+    resultBlocage.textContent = "";
+    resultBlocage.hidden = true;
+  }
+
+  if (resultCategory) {
+    resultCategory.textContent = "Catégorie de revenus : " + CATEGORY_LABELS[categorie];
+  }
+  if (resultSurface) {
+    resultSurface.textContent =
+      "Surface du logement à rénover : " + formatSurfaceM2(ctx.surfaceRenover) + " m²";
+  }
+  if (resultConstruction) {
+    resultConstruction.textContent =
+      "Année de construction : " +
+      ctx.constructionYear +
+      " (environ " +
+      ageLogement +
+      " an" +
+      (ageLogement > 1 ? "s" : "") +
+      ")";
+  }
+
+  const breakdownRes = renderUnifiedResultBreakdown(ctx.projets, categorie, {
+    maprimeBloquee: results.maprimeBloquee,
+    ceeBloquee: results.ceeBloquee,
+    housingTypeVal: ctx.housingTypeVal,
+    heatingBeforeVal: ctx.heatingBeforeVal,
+    surfaceARenover: ctx.surfaceRenover,
+    postal: ctx.postal,
+  });
+
+  const grandTotal = breakdownRes.maprimeTotal + breakdownRes.totalPrime;
+  const showTotal = breakdownRes.anyEligible && grandTotal > 0;
+
+  resultPanel.classList.toggle("result--ineligible", !showTotal);
+
+  if (resultTotalAmount) {
+    resultTotalAmount.textContent = showTotal ? formatEuros(grandTotal) : "Non éligible";
+  }
+
+  results.ceeRes = {
+    totalPrime: breakdownRes.totalPrime,
+    anyComputed: breakdownRes.anyComputed,
+  };
+  results.grandTotal = grandTotal;
+
+  return results.ceeRes;
+}
+
+function buildLeadSimulationSummary(ctx, results) {
+  const ceeRes = results.ceeRes;
+  const maprimeLabel =
+    results.maprimeBloquee || !results.anyEligible
+      ? "Non éligible"
+      : formatEuros(results.totalMontant);
+  const ceeLabel =
+    ceeRes && ceeRes.anyComputed && Number.isFinite(ceeRes.totalPrime) && ceeRes.totalPrime > 0
+      ? formatEuros(ceeRes.totalPrime)
+      : "Non éligible";
+  const grandTotal =
+    (results.grandTotal != null ? results.grandTotal : 0) ||
+    (results.anyEligible ? results.totalMontant : 0) +
+      (ceeRes && ceeRes.anyComputed ? ceeRes.totalPrime : 0);
+
+  const summaryRows = [
+    { label: "Code postal", value: ctx.postal },
+    { label: "Ville", value: ctx.cityLine },
+    { label: "Personnes dans le foyer", value: ctx.household },
+    { label: "Tranche de revenus", value: ctx.incomeLabel },
+    { label: "Type de logement", value: HOUSING_LABELS[ctx.housingTypeVal] || ctx.housingTypeVal },
+    { label: "Statut", value: STATUS_LABELS[ctx.statusVal] || ctx.statusVal },
+    { label: "Année de construction", value: ctx.constructionYear },
+    { label: "Surface à rénover (m²)", value: ctx.surfaceRenover },
+    {
+      label: "Chauffage avant travaux",
+      value: HEATING_LABELS[ctx.heatingBeforeVal] || ctx.heatingBeforeVal,
+    },
+  ];
+
+  const summaryLines = summaryRows.map(function (r) {
+    return r.label + " : " + r.value;
+  });
+
+  const projectLines = ctx.projets.map(function (p, i) {
+    const name = WORK_TYPE_LABELS[p.workType] || p.workType;
+    const kind = getWorkTypeSaisie(p.workType);
+    if (kind === "surface_m2") return name + " — " + p.valeur + " m²";
+    if (kind === "nombre") return name + " — " + p.valeur + " ouvrant(s)";
+    return name;
+  });
+
+  const resultRows = [
+    { label: "Montant total des primes", value: grandTotal > 0 ? formatEuros(grandTotal) : "Non éligible" },
+    { label: "Total MaPrimeRénov’ estimé", value: maprimeLabel },
+    { label: "Total CEE estimé", value: ceeLabel },
+  ];
+
+  return {
+    summaryRows: summaryRows,
+    summaryLines: summaryLines,
+    projectLines: projectLines,
+    resultRows: resultRows,
+    resultLines: resultRows.map(function (r) {
+      return r.label + " : " + r.value;
+    }),
+  };
+}
+
+function showLeadPanel() {
+  if (form) form.hidden = true;
+  if (leadConsentBlockedPanel) leadConsentBlockedPanel.hidden = true;
+  if (leadPanel) {
+    leadPanel.hidden = false;
+    leadPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  if (resultPanel) resultPanel.hidden = true;
+  if (resultBackWrap) resultBackWrap.hidden = true;
+}
+
+function showLeadConsentBlockedPage() {
+  if (leadPanel) leadPanel.hidden = true;
+  if (form) form.hidden = true;
+  if (resultPanel) resultPanel.hidden = true;
+  if (leadConsentBlockedPanel) {
+    leadConsentBlockedPanel.hidden = false;
+    leadConsentBlockedPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+/** Affiche la page de résultats (après formulaire lead). */
+function showResultsPage(ctx, results) {
+  if (leadPanel) leadPanel.hidden = true;
+  if (leadConsentBlockedPanel) leadConsentBlockedPanel.hidden = true;
+  if (form) form.hidden = true;
+  applySimulationResultsToDom(ctx, results);
+  if (resultBackWrap) resultBackWrap.hidden = false;
+  if (resultPanel) {
+    resultPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function showSimulationFormAgain() {
+  pendingSimulation = null;
+  if (leadPanel) leadPanel.hidden = true;
+  if (leadConsentBlockedPanel) leadConsentBlockedPanel.hidden = true;
+  if (resultPanel) resultPanel.hidden = true;
+  if (resultBackWrap) resultBackWrap.hidden = true;
+  if (form) {
+    form.hidden = false;
+    form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function validateSimulationForm(data) {
   const postal = normalizePostalDigits(data.get("postalCode"));
   const region = deriveRegionFromPostalCode(postal);
   const categorieRevenus = String(data.get("income") ?? "");
@@ -1058,9 +1464,7 @@ form.addEventListener("submit", function (e) {
     hasError = true;
   }
 
-  /** @type {{ workType: string, valeur: number }[]} */
   const projets = [];
-
   projectRows.forEach(function (row) {
     const wt = row.querySelector(".project-work-type").value;
     const kind = getWorkTypeSaisie(wt);
@@ -1069,7 +1473,10 @@ form.addEventListener("submit", function (e) {
     const qVal = Number(quantityRaw);
 
     if (!wt) {
-      showProjectRowError(row, "workType", "Choisissez un type de travaux.");
+      const msg = row.dataset.selectedCategory
+        ? "Choisissez le projet concerné."
+        : "Choisissez une famille de travaux.";
+      showProjectRowError(row, "workType", msg);
       hasError = true;
       return;
     }
@@ -1092,98 +1499,188 @@ form.addEventListener("submit", function (e) {
     if (kind === "surface_m2" || kind === "nombre") {
       valeur = qVal;
     }
-    projets.push({ workType: wt, valeur });
+    projets.push({ workType: wt, valeur: valeur });
   });
 
   if (hasError) {
+    return { ok: false };
+  }
+
+  return {
+    ok: true,
+    ctx: {
+      postal: postal,
+      region: region,
+      categorieRevenus: categorieRevenus,
+      household: household,
+      constructionYear: constructionYear,
+      surfaceRenover: surfaceRenover,
+      cityLine: cityLine,
+      projets: projets,
+      housingTypeVal: data.get("housingType"),
+      heatingBeforeVal: data.get("heatingBefore"),
+      statusVal: data.get("status"),
+      incomeLabel: getSelectLabel("income"),
+    },
+  };
+}
+
+function validateLeadForm(data) {
+  let hasError = false;
+  const lastName = String(data.get("leadLastName") ?? "").trim();
+  const firstName = String(data.get("leadFirstName") ?? "").trim();
+  const email = String(data.get("leadEmail") ?? "").trim();
+  const phone = String(data.get("leadPhone") ?? "").trim();
+
+  if (!lastName) {
+    showFieldError("leadLastName", "Indiquez votre nom.");
+    hasError = true;
+  }
+  if (!firstName) {
+    showFieldError("leadFirstName", "Indiquez votre prénom.");
+    hasError = true;
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showFieldError("leadEmail", "Indiquez une adresse e-mail valide.");
+    hasError = true;
+  }
+  if (!phone || phone.replace(/\D/g, "").length < 10) {
+    showFieldError("leadPhone", "Indiquez un numéro de téléphone valide.");
+    hasError = true;
+  }
+  if (hasError) {
+    return { ok: false };
+  }
+
+  return {
+    ok: true,
+    lead: {
+      lastName: lastName,
+      firstName: firstName,
+      email: email,
+      phone: phone,
+      consent: true,
+    },
+  };
+}
+
+if (leadBackBtn) {
+  leadBackBtn.addEventListener("click", function () {
+    showSimulationFormAgain();
+  });
+}
+
+if (resultBackBtn) {
+  resultBackBtn.addEventListener("click", function () {
+    showSimulationFormAgain();
+  });
+}
+
+if (leadConsentBackBtn) {
+  leadConsentBackBtn.addEventListener("click", function () {
+    showLeadPanel();
+  });
+}
+
+if (leadConsentEditSimBtn) {
+  leadConsentEditSimBtn.addEventListener("click", function () {
+    showSimulationFormAgain();
+  });
+}
+
+if (leadForm) {
+  leadForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    clearFieldErrors();
+
+    if (!pendingSimulation) {
+      if (leadSendError) {
+        leadSendError.textContent = "Aucune simulation en cours. Relancez le calcul.";
+        leadSendError.hidden = false;
+      }
+      return;
+    }
+
+    const data = new FormData(leadForm);
+
+    if (!data.get("leadConsent")) {
+      const leadCheckWithoutConsent = validateLeadForm(data);
+      if (!leadCheckWithoutConsent.ok) {
+        focusFirstInvalidField();
+        return;
+      }
+      showLeadConsentBlockedPage();
+      return;
+    }
+
+    const leadCheck = validateLeadForm(data);
+    if (!leadCheck.ok) {
+      focusFirstInvalidField();
+      return;
+    }
+
+    const brand = window.SIMULATOR_BRAND || {};
+    const simCtx = pendingSimulation.ctx;
+    const simResults = pendingSimulation.results;
+
+    if (!simResults.ceeRes) {
+      simResults.ceeRes = computeCEETotals(simCtx.projets, simResults.categorie, {
+        ceeBloquee: simResults.ceeBloquee,
+        housingTypeVal: simCtx.housingTypeVal,
+        heatingBeforeVal: simCtx.heatingBeforeVal,
+        surfaceARenover: simCtx.surfaceRenover,
+        postal: simCtx.postal,
+      });
+    }
+
+    const snapshot = { ctx: simCtx, results: simResults };
+    pendingSimulation = null;
+
+    showResultsPage(snapshot.ctx, snapshot.results);
+
+    const emailSummary = buildLeadSimulationSummary(snapshot.ctx, snapshot.results);
+    const emailContent =
+      typeof buildSimulatorLeadEmailContent === "function"
+        ? buildSimulatorLeadEmailContent(brand, leadCheck.lead, emailSummary)
+        : null;
+
+    if (!emailContent || typeof sendSimulatorLeadNotification !== "function") {
+      return;
+    }
+
+    sendSimulatorLeadNotification(brand, emailContent).catch(function (err) {
+      if (resultBlocage) {
+        const msg =
+          (err && err.message ? err.message : "Notification lead non envoyée.") +
+          " Vos résultats restent affichés ci-dessous.";
+        resultBlocage.textContent = resultBlocage.textContent
+          ? resultBlocage.textContent + " " + msg
+          : msg;
+        resultBlocage.hidden = false;
+      }
+    });
+  });
+}
+
+form.addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  clearFieldErrors();
+
+  const data = new FormData(form);
+  const check = validateSimulationForm(data);
+  if (!check.ok) {
     focusFirstInvalidField();
     return;
   }
 
   syncRegionFromPostal();
 
+  const ctx = Object.assign({}, check.ctx, { categorie: check.ctx.categorieRevenus });
+
   runProgressAnimation(function afterProgress() {
-    const ileDeFrance = region === "idf";
-    const categorie = categorieRevenus;
-    const housingTypeVal = data.get("housingType");
-    const heatingBeforeVal = data.get("heatingBefore");
-    const statusVal = data.get("status");
-    const ageLogement = getAgeLogementAnnees(constructionYear);
-
-    const messagesBlocage = [];
-    let maprimeBloquee = false;
-    if (MAPRIME_STATUTS_EXCLUS[statusVal]) {
-      maprimeBloquee = true;
-      messagesBlocage.push(MAPRIME_STATUTS_EXCLUS[statusVal]);
-    }
-    if (ageLogement < MAPRIME_AGE_MIN_LOGEMENT) {
-      maprimeBloquee = true;
-      messagesBlocage.push(
-        "Logement d’environ " +
-          ageLogement +
-          " an" +
-          (ageLogement > 1 ? "s" : "") +
-          " (moins de " +
-          MAPRIME_AGE_MIN_LOGEMENT +
-          " ans) : non éligible à MaPrimeRénov’ dans ce scénario."
-      );
-    }
-
-    const ceeBloquee = ageLogement < 2;
-    if (ceeBloquee) {
-      messagesBlocage.push("CEE non éligibles : logement de moins de 2 ans.");
-    }
-
-    let totalMontant = 0;
-    let anyEligible = false;
-
-    if (!maprimeBloquee) {
-      projets.forEach(function (p) {
-        const aide = calculerAideMPR(categorie, p.workType, p.valeur);
-        if (aide.eligible) {
-          totalMontant += aide.montant;
-          anyEligible = true;
-        }
-      });
-    }
-
-    resultPanel.hidden = false;
-    resultPanel.classList.toggle("result--ineligible", !anyEligible);
-
-    if (messagesBlocage.length) {
-      resultBlocage.textContent = messagesBlocage.join(" ");
-      resultBlocage.hidden = false;
-    } else {
-      resultBlocage.textContent = "";
-      resultBlocage.hidden = true;
-    }
-
-    resultCategory.textContent = "Catégorie de revenus : " + CATEGORY_LABELS[categorie] + ".";
-    resultSituation.textContent =
-      "Surface du logement à rénover (déclarée) : " +
-      formatSurfaceM2(surfaceRenover) +
-      " m². Année de construction : " +
-      constructionYear +
-      " (environ " +
-      ageLogement +
-      " an" +
-      (ageLogement > 1 ? "s" : "") +
-      ").";
-
-    resultAmount.textContent = anyEligible ? formatEuros(totalMontant) : "Non éligible";
-    renderResultBreakdown(projets, categorie, { maprimeBloquee });
-
-    const ceeRes = renderCEEBreakdown(projets, categorie, {
-      ceeBloquee,
-      housingTypeVal,
-      heatingBeforeVal,
-      surfaceARenover: surfaceRenover,
-      postal,
-    });
-    resultCEEAmount.textContent =
-      !ceeRes.anyComputed || !Number.isFinite(ceeRes.totalPrime) || ceeRes.totalPrime <= 0
-        ? "Non éligible"
-        : formatEuros(ceeRes.totalPrime);
+    const results = computeSimulationResults(ctx);
+    pendingSimulation = { ctx: ctx, results: results };
 
     progressBar.style.width = "100%";
     window.setTimeout(function () {
@@ -1191,7 +1688,7 @@ form.addEventListener("submit", function (e) {
       progressEl.setAttribute("aria-hidden", "true");
       progressBar.style.width = "0%";
       submitBtn.disabled = false;
-      resultPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      showLeadPanel();
     }, 320);
   });
 });
