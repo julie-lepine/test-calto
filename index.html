@@ -3,22 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simulateur de primes travaux — CEE & MaPrimeRénov'</title>
+  <title>Simulateur de primes travaux — PPF</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet" />
 </head>
 <body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <!-- Bandeau supérieur : logo (gauche) + lien « Découvrir PPF » (droite) — pas confondre avec site-header__bar (supprimée) -->
+      <div class="site-header__logo-row">
+        <div id="brand-logo-wrap" class="site-header__logo-wrap" hidden>
+          <img id="brand-logo" class="site-header__logo" alt="" width="320" height="90" decoding="async" />
+        </div>
+        <a
+          id="brand-bar-outline"
+          class="site-header__pill site-header__pill--outline site-header__logo-row-cta"
+          href="https://ppf.fr/qui-sommes-nous/"
+        >
+          Découvrir PPF
+        </a>
+      </div>
+
+      <div class="site-header__intro">
+        <h1 id="brand-header-title">Simulateur de primes travaux — CEE et MaPrimeRénov’ (PPF)</h1>
+      </div>
+    </div>
+  </header>
+
   <div class="page">
-    <header class="header">
-      <h1>Simulateur de primes travaux - CEE et MaPrimeRénov’</h1>
-      <p class="header__subtitle">
+    <main class="main">
+      <p id="brand-header-subtitle" class="main__lead">
         Estimation indicative pour les primes <strong>CEE</strong> et <strong>MaPrimeRénov’</strong> : vous pouvez saisir <strong>plusieurs projets de travaux</strong> (lots) ; le total affiché est la somme des aides estimées par projet, selon votre foyer et le code postal du logement.
       </p>
-    </header>
-
-    <main class="main">
       <form id="simulation-form" class="card form" novalidate>
         <input type="hidden" name="region" id="region" value="" />
         <h2 class="card__title">Votre situation</h2>
@@ -221,20 +239,21 @@
         <div id="result-breakdown" class="result-breakdown" aria-label="Détail des primes par projet"></div>
         <p class="result__breakdown-title">Détail CEE par produit / projet</p>
         <div id="result-breakdown-cee" class="result-breakdown" aria-label="Détail des primes CEE par projet"></div>
-        <p class="result__disclaimer">
+        <p id="brand-result-disclaimer" class="result__disclaimer">
           Estimation indicative — primes MaPrimeRénov’ et CEE (plusieurs lots : total simplifié) — simulation non contractuelle
         </p>
       </section>
     </main>
 
     <footer class="footer">
-      <p>
+      <p id="brand-footer-text">
         Total = somme des projets saisis ; en réalité CEE et MaPrimeRénov’ (parcours accompagné, cumuls, plafonds globaux, etc.) peuvent différer. Données à titre indicatif.
       </p>
     </footer>
   </div>
 
   <script src="cee-calculator.js"></script>
+  <script src="brand-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
