@@ -121,16 +121,19 @@ const WORK_TYPES_SURFACE_M2 = [
   "combles perdus",
   "murs",
   "plancher",
-  "pac air air",
-  "vmc simple flux",
 ];
 const WORK_TYPES_NOMBRE = ["menuiseries"];
 
-/** Forfaits : pas de surface ni de nombre — l’input reste masqué. */
+/**
+ * Forfaits sans saisie au niveau projet : pas de m² ni de nombre par lot.
+ * PAC air/air, VMC simple flux, PAC air/eau, VMC double flux : la surface CEE
+ * vient du champ « Surface du logement à rénover (m²) » du formulaire.
+ */
 const WORK_TYPES_FORFAIT_SANS_SAISIE = [
   "chauffe eau thermo",
   "pac air eau",
   "pac geo",
+  "pac air air",
   "chauffe eau solaire individuel",
   "chauffe eau solaire combiné",
   "chaudieres biomasse",
@@ -138,6 +141,7 @@ const WORK_TYPES_FORFAIT_SANS_SAISIE = [
   "poele granules",
   "foyer ferme",
   "cuve fioul",
+  "vmc simple flux",
   "double flux",
 ];
 
