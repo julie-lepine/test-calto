@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tests marque — brand-config</title>
+  <script>
+    (function () {
+      var caseKey = new URLSearchParams(window.location.search).get("case") || "";
+      /**
+       * ?case=passthrough → aucune surcouche (comportement proche index.html).
+       * ?case=css-vars-only → surcharge partielle SIMULATOR_BRAND (uniquement cssVars).
+       * ?case=no-remote-font → fontStylesheetHref "" + typo système (pas de lien Google Fonts auto).
+       * ?case=sanitize-subtitle → headerSubtitle hostile (vérif sous-titre nettoyé).
+       */
+      if (caseKey === "css-vars-only") {
+        window.SIMULATOR_BRAND = {
+          cssVars: {
+            "--brand-primary": "#e11d48",
+            "--brand-primary-muted": "#e11d48cc",
+            "--brand-primary-hover": "#be123c",
+            "--brand-primary-soft": "#e11d4830",
+            "--brand-btn-secondary-border": "var(--brand-primary)",
+            "--brand-btn-secondary-hover-border": "var(--brand-primary-muted)"
+          }
+        };
+      } else if (caseKey === "no-remote-font") {
+        window.SIMULATOR_BRAND = {
+          fontStylesheetHref: "",
+          cssVars: {
+            "--brand-font-sans": "system-ui, \"Segoe UI\", sans-serif",
+            "--brand-font-display": "Georgia, \"Times New Roman\", serif"
+          }
+        };
+      } else if (caseKey === "sanitize-subtitle") {
+        window.SIMULATOR_BRAND = {
+          headerSubtitle:
+            "Texte sûr. <strong>Gras conservé.</strong><script>document.body.dataset.bad=1<\/script><iframe src=\"about:blank\"><\/iframe><style>body{background:red!important}<\/style>"
+        };
+      }
+      window.__BRAND_TEST_CASE__ = caseKey || "passthrough";
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .brand-test-banner {
+      max-width: var(--brand-page-max-width);
+      margin: 0 auto 1rem;
+      padding: 0.85rem 1rem;
+      background: rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--border, #ddd);
+      border-radius: var(--radius, 12px);
+      font-size: 0.875rem;
+    }
+    .brand-test-banner code {
+      font-size: 0.8rem;
+      word-break: break-all;
+    }
+    .brand-test-banner ul {
+      margin: 0.5rem 0 0;
+      padding-left: 1.2rem;
+    }
+    .brand-test-dump {
+      margin-top: 0.65rem;
+      padding: 0.5rem 0.75rem;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: var(--brand-control-radius, 8px);
+      overflow: auto;
+      max-height: 10rem;
+      font-size: 0.72rem;
+    }
+    .brand-test-links {
+      margin-top: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .brand-test-links a {
+      font-size: 0.82rem;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.2/dist/purify.min.js" crossorigin="anonymous"></script>
+  <script src="brand-config.js"></script>
+</head>
+<body>
+  <div class="page" style="padding-top: 1rem">
+    <div class="brand-test-banner card" aria-label="Instructions de test">
+      <strong>Tests brand-config</strong> — cas : <code id="brand-test-case-label"></code>
+      <ul id="brand-test-expectations"></ul>
+      <p style="margin: 0.5rem 0 0; font-style: italic; color: var(--text-muted)">
+        Ouvrir ce fichier depuis un petit serveur HTTP local si besoin (chemins relatifs). Sans JS : désactiver
+        JS dans DevTools puis recharger (<code>index.html</code> garde les textes HTML statiques).
+      </p>
+      <nav class="brand-test-links" aria-label="Scénarios">
+        <a href="test-brand.html?case=passthrough">passthrough</a>
+        <a href="test-brand.html?case=css-vars-only">css-vars-only</a>
+        <a href="test-brand.html?case=no-remote-font">no-remote-font</a>
+        <a href="test-brand.html?case=sanitize-subtitle">sanitize-subtitle</a>
+      </nav>
+      <details style="margin-top: 0.65rem">
+        <summary>Fusion finale (après merge)</summary>
+        <pre class="brand-test-dump" id="brand-test-dump"></pre>
+      </details>
+    </div>
+
+    <header class="site-header">
+      <div class="site-header__inner">
+        <div class="site-header__logo-row">
+          <div id="brand-logo-wrap" class="site-header__logo-wrap" hidden>
+            <img id="brand-logo" class="site-header__logo" alt="" width="320" height="90" decoding="async" />
+          </div>
+          <a
+            id="brand-bar-outline"
+            class="site-header__pill site-header__pill--outline site-header__logo-row-cta"
+            href="#"
+          >
+            CTA
+          </a>
+        </div>
+        <div class="site-header__intro">
+          <h1 id="brand-header-title">Titre brut HTML (valeur défaut fichier)</h1>
+        </div>
+      </div>
+    </header>
+
+    <main class="main" style="max-width: var(--brand-page-max-width); margin-inline: auto; padding-bottom: 2rem">
+      <p id="brand-header-subtitle" class="main__lead card">
+        Fallback HTML hors JS : sous-titre statique uniquement tant que DOMContentLoaded n’a pas tourné.
+      </p>
+
+      <section class="card brand-test-buttons" aria-labelledby="brand-test-buttons-title">
+        <h2 id="brand-test-buttons-title" class="card__title">Boutons formulaire (styles.css + --brand-btn-*)</h2>
+        <p class="field__hint" style="margin-top: 0; margin-bottom: 1rem">
+          Mêmes classes que <code>index.html</code>. Le cas <strong>css-vars-only</strong> doit colorer primaire /
+          secondaire en accord avec le rose <code>#e11d48</code>.
+        </p>
+        <div class="form__actions">
+          <button type="button" class="btn btn--primary">Primaire — Lancer la simulation</button>
+          <button type="button" class="btn btn--secondary">Secondaire — Ajouter un projet</button>
+          <button type="button" class="btn btn--ghost">Ghost — Retirer</button>
+          <button type="button" class="btn btn--primary" disabled>Primaire désactivé</button>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p id="brand-footer-text">Pied brut.</p>
+      </footer>
+      <p id="brand-result-disclaimer" class="card" style="font-size: 0.82rem">
+        Disclaimer résultat (maquette minimale pour applySimulatorBrand).
+      </p>
+    </main>
+  </div>
+
+  <script>
+    document.getElementById("brand-test-case-label").textContent =
+      typeof window.__BRAND_TEST_CASE__ === "undefined" ? "?" : String(window.__BRAND_TEST_CASE__);
+
+    var ul = document.getElementById("brand-test-expectations");
+    var c = window.__BRAND_TEST_CASE__;
+    var items = [];
+
+    if (c === "" || c === "passthrough") {
+      items = [
+        "Aucune surcouche avant brand-config.",
+        "Couleurs = défauts PPF dans brand-config.js.",
+        "Deux liens préconnect Google + stylesheet DM Sans / Fraunces injectés dans le head."
+      ];
+    } else if (c === "css-vars-only") {
+      items = [
+        "Accent / bordures en rose (#e11d48) alors que titre / textes restent les defaults fusionnés (PPF dans brand-config.js).",
+        "Polices externes toujours chargées (valeur défaut).",
+        "Bouton primaire (fond) et secondaire (bordure / texte) alignés sur la palette rosée fusionnée."
+      ];
+    } else if (c === "no-remote-font") {
+      items = [
+        "Pas d’élément #simulator-brand-font-stylesheet dans le DOM (voir DevTools → Elements).",
+        "Typographie = system-ui / Georgia depuis cssVars.",
+        "Pour une police self-hostée : ajoutez un <link> ou du @font-face dans ce fichier (ou votre CSS)."
+      ];
+    } else if (c === "sanitize-subtitle") {
+      items = [
+        "Sous-titre : phrase lisible avec gras légitime ; pas d’iframe ni style visible.",
+        "document.body.dataset.bad ne doit pas être défini (pas d’exécution script injecté)."
+      ];
+    }
+
+    items.push(
+      "Carte Boutons : primaire / secondaire / ghost (+ état disabled) = classes .btn ; tokens --brand-btn-* (dérivées de --brand-primary quand surchargé)."
+    );
+
+    ul.innerHTML = items.map(function (t) {
+      return "<li>" + t + "</li>";
+    }).join("");
+
+    if (typeof window.SIMULATOR_BRAND === "object" && window.SIMULATOR_BRAND) {
+      var b = window.SIMULATOR_BRAND;
+      document.getElementById("brand-test-dump").textContent =
+        "[SIMULATOR_BRAND]\nfontStylesheetHref: " +
+        JSON.stringify(b.fontStylesheetHref) +
+        "\nheaderSubtitle length: " +
+        String(b.headerSubtitle != null ? b.headerSubtitle.length : 0) +
+        "\n\ncssVars:\n" +
+        JSON.stringify(b.cssVars, null, 2);
+    }
+  </script>
+</body>
+</html>

@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Simulateur de primes travaux — PPF</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- Sanitize headerSubtitle (HTML limité) — charger avant brand-config.js -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.2/dist/purify.min.js" crossorigin="anonymous"></script>
   <!-- Thème (--brand-*). Optionnel : window.SIMULATOR_BRAND avant ce script (voir BRAND.md). -->
   <script src="brand-config.js"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="site-header__inner">
-      <!-- Bandeau supérieur : logo (gauche) + lien « Découvrir PPF » (droite) — pas confondre avec site-header__bar (supprimée) -->
       <div class="site-header__logo-row">
         <div id="brand-logo-wrap" class="site-header__logo-wrap" hidden>
           <img id="brand-logo" class="site-header__logo" alt="" width="320" height="90" decoding="async" />

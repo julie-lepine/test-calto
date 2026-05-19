@@ -1,5 +1,6 @@
 /**
  * Thème graphique centralisé (DEFAULT_CSS_VARS) + polices Web + textes/logo/CTA.
+ * headerSubtitle passe par window.DOMPurify si disponible (script chargé avant celui-ci).
  * Surcharge : window.SIMULATOR_BRAND avant ce script dans <head> (voir BRAND.md).
  */
 
@@ -63,6 +64,9 @@
   };
 
   var defaults = {
+    /** Version du pack marque + pages (traçabilité déploiement partenaire). Surcharge possible via SIMULATOR_BRAND. */
+    simulatorVersion: "1.0.0",
+
     fontStylesheetHref: DEFAULT_FONT_STYLESHEET_HREF,
 
     pageTitle: "Simulateur de primes travaux — PPF",
@@ -152,6 +156,17 @@
   var pt = window.SIMULATOR_BRAND.pageTitle;
   if (pt != null && String(pt).trim() !== "") document.title = String(pt);
 
+  function applySimulatorVersion() {
+    var v = window.SIMULATOR_BRAND.simulatorVersion;
+    if (v == null || String(v).trim() === "") {
+      document.documentElement.removeAttribute("data-simulator-version");
+      return;
+    }
+    document.documentElement.setAttribute("data-simulator-version", String(v));
+  }
+
+  applySimulatorVersion();
+
   function applyBrandCssVars(vars) {
     if (!vars || typeof vars !== "object") return;
     var root = document.documentElement;
@@ -162,8 +177,31 @@
 
   applyBrandCssVars(window.SIMULATOR_BRAND.cssVars);
 
+  /**
+   * Réduit XSS sur headerSubtitle : liste blanche de balises si DOMPurify est disponible ;
+   * sinon extraction texte brute (perte du gras) via DOMParser.
+   */
+  function sanitizeHeaderSubtitle(raw) {
+    var html = String(raw);
+    var purifyFn = window.DOMPurify && typeof window.DOMPurify.sanitize === "function" ? window.DOMPurify.sanitize : null;
+    if (purifyFn) {
+      return purifyFn(html, {
+        ALLOWED_TAGS: ["strong", "em", "b", "i", "br", "a"],
+        ALLOWED_ATTR: ["href", "title", "target", "rel"],
+        ALLOW_DATA_ATTR: false
+      });
+    }
+    try {
+      var doc = new DOMParser().parseFromString(html, "text/html");
+      return doc.body ? doc.body.textContent || "" : "";
+    } catch (_e) {
+      return "";
+    }
+  }
+
   function applySimulatorBrand() {
     var b = window.SIMULATOR_BRAND;
+    applySimulatorVersion();
     applyBrandCssVars(b.cssVars);
 
     if (b.pageTitle != null && String(b.pageTitle).trim() !== "") {
@@ -180,7 +218,7 @@
       if (b.headerSubtitle == null || b.headerSubtitle === "") {
         sub.innerHTML = "";
       } else {
-        sub.innerHTML = String(b.headerSubtitle);
+        sub.innerHTML = sanitizeHeaderSubtitle(b.headerSubtitle);
       }
     }
 

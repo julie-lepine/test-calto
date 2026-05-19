@@ -4,7 +4,7 @@ Le simulateur peut être déployé pour un client sans modifier la logique méti
 
 ## Ordre de chargement recommandé
 
-1. Dans le `<head>` : **`styles.css`** puis **`brand-config.js`** — ainsi les variables `--brand-*` sont disponibles dès la première mise en page.
+1. Dans le `<head>` : **`styles.css`**, puis la librairie **DOMPurify** (CDN), puis **`brand-config.js`** — le sous-titre en HTML est sanitizé avant injection.
 2. Dans le pied de page (ou après le DOM métier) : **`cee-calculator.js`**, puis **`app.js`**.
 3. **Une seule** inclusion de `brand-config.js`.
 
@@ -14,6 +14,8 @@ Pour surcharger sans éditer `brand-config.js`, déclarez `window.SIMULATOR_BRAN
 
 ```html
 <link rel="stylesheet" href="styles.css" />
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.2/dist/purify.min.js" crossorigin="anonymous"></script>
 
 <script>
   window.SIMULATOR_BRAND = {
@@ -50,6 +52,7 @@ Pour surcharger sans éditer `brand-config.js`, déclarez `window.SIMULATOR_BRAN
 | Champ              | Effet                                                                 |
 |--------------------|----------------------------------------------------------------------|
 | `pageTitle`        | `document.title` si renseigné.                                       |
+| `simulatorVersion` | Traçabilité pack (défaut `1.0.0` dans `defaults`) : posé sur `<html data-simulator-version="…">`. Chaîne vide : attribut retiré. |
 | `headerTitle`      | `#brand-header-title`.                                               |
 | `headerSubtitle`   | `#brand-header-subtitle` (si défini dans l’objet).                 |
 | `footerText`       | `#brand-footer-text`.                                                |
@@ -59,9 +62,13 @@ Pour surcharger sans éditer `brand-config.js`, déclarez `window.SIMULATOR_BRAN
 | `outlineCtaLabel`, `outlineCtaHref` | Bouton lien en-tête (`#brand-bar-outline`) ; masqué si `href` vide. |
 | `fontStylesheetHref` | URL d’une feuille de polices (ex. lien Google Fonts `css2?...`). Chaîne vide : aucun chargement automatique. |
 
-Les textes par défaut (titre d’onglet, h1, sous-titre, pied de page, disclaimer) sont définis dans **`defaults`** de `brand-config.js` et réappliqués au chargement. Le sous-titre (`headerSubtitle`) est injecté en **HTML** (balises autorisées côté marque : ex. `<strong>`) : contenu fourni par la marque, pas par l’utilisateur final.
+Les textes par défaut (titre d’onglet, h1, sous-titre, pied de page, disclaimer) sont définis dans **`defaults`** de `brand-config.js` et réappliqués au chargement.
+
+**`headerSubtitle` (HTML)** : le contenu est passé dans **DOMPurify** avec une liste blanche — balises conservées : `strong`, `em`, `b`, `i`, `br`, `a` (attributs `href`, `title`, `target`, `rel`). Le reste est retiré. Si DOMPurify n’est pas chargé (snippet incomplet), repli : tout le markup est ramené au **texte brut** (`DOMParser`), sans exécution de script. À charge de la marque de ne pas mettre dans la config une chaîne non maîtrisée (pas de champ public non filtré).
 
 Sans JavaScript, le contenu initial de `index.html` reste affiché.
+
+**Déploiement sur votre infra** : servir également `purify.min.js` (comme dans `index.html`) **avant** `brand-config.js`, ou même origine CDN (version figée recommandée).
 
 ## Variables CSS (`cssVars`)
 
@@ -140,3 +147,9 @@ Pour des polices self-hostées ou un CDN autre que Google : mettez l’URL de vo
 ## Déploiement client
 
 Pour un client, soit vous surchargez depuis le HTML comme ci-dessus, soit vous dupliquez **`brand-config.js`** et adaptez **`DEFAULT_CSS_VARS`**, **`DEFAULT_FONT_STYLESHEET_HREF`**, **`defaults`** (logo, CTA, textes, URL des polices).
+
+## Page de test locale
+
+Fichier **`test-brand.html`** : scénarios `?case=passthrough` (défaut), `css-vars-only`, `no-remote-font`, `sanitize-subtitle` — à ouvrir via un serveur HTTP local si besoin (chemins relatifs vers `styles.css` et `brand-config.js`).
+
+**Exemples partenaires** (snippet CDN, iframe) : dossier **`examples/client-demo/`**. Aperçu projet : **`README.md`** à la racine.

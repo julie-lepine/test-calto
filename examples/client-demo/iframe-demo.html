@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Démo intégration — iframe simulateur</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f4f4f5;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    iframe {
+      display: block;
+      width: 100%;
+      min-height: 90vh;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+    }
+    p {
+      color: #444;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Page partenaire (démo)</h1>
+    <p>
+      Le simulateur est chargé dans une iframe. En production, remplacez
+      <code>src</code> par l’URL HTTPS publique de votre déploiement (même origine ou autorisée).
+    </p>
+    <!-- Chemin relatif au dépôt : servez la racine avec npx serve -->
+    <iframe title="Simulateur de primes rénovation" src="../../index.html"></iframe>
+  </div>
+</body>
+</html>

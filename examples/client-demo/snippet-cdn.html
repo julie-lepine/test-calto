@@ -1,0 +1,41 @@
+<!--
+  ============================================
+  MODÈLE — Coller fragments dans votre page après remplacement BASE par votre CDN HTTPS
+  BASE = exemple : https://simulateur.monentreprise.fr/v1/
+  ============================================
+
+  HEAD : feuilles + DOMPurify + surcouche + brand-config.js
+-->
+
+<!-- <link rel="stylesheet" href="BASE/styles.css" /> -->
+
+<!--
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.2/dist/purify.min.js" crossorigin="anonymous"></script>
+
+<script>
+  window.SIMULATOR_BRAND = {
+    simulatorVersion: "1.0.0",
+    pageTitle: "Simulateur — Mon partenaire",
+    headerTitle: "Estimez vos aides",
+    logoUrl: "https://monclient.example/logo.svg",
+    logoAlt: "Mon client",
+    brandHomeUrl: "https://monclient.example/",
+    outlineCtaLabel: "Site principal",
+    outlineCtaHref: "https://monclient.example/",
+    cssVars: {
+      "--brand-primary": "#0055aa",
+      "--brand-primary-hover": "#003d7a"
+    }
+  };
+</script>
+<script src="BASE/brand-config.js"></script>
+-->
+
+<!--
+  BODY (fin de page) : logique métier — ordre conforme au simulateur officiel.
+
+<script src="BASE/cee-calculator.js"></script>
+<script src="BASE/app.js"></script>
+-->
+
+<!-- Coller ici le markup du formulaire (structure identique à index.html) ou garder votre page iframe. -->
