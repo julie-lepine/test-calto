@@ -20,6 +20,7 @@
         <a
           id="brand-bar-outline"
           class="site-header__pill site-header__pill--outline site-header__logo-row-cta"
+          target="_blank"
           href="https://ppf.fr/qui-sommes-nous/"
         >
           Découvrir PPF
@@ -58,9 +59,7 @@
               <option value="">— Choisir —</option>
               <option value="occupant">Propriétaire occupant</option>
               <option value="bailleur">Propriétaire bailleur</option>
-              <option value="locataire">Locataire</option>
-              <option value="residence_secondaire">Propriétaire — résidence secondaire</option>
-              <option value="sci">SCI / société</option>
+              <option value="autre">Autre statut</option>
             </select>
             <span class="field__error" id="err-status" hidden></span>
           </label>
@@ -94,35 +93,6 @@
             <span class="field__error" id="err-surfaceARenover" hidden></span>
           </label>
 
-          <label class="field field--full">
-            <span class="field__label">Adresse du logement</span>
-            <input
-              type="text"
-              name="addressLine"
-              id="address"
-              autocomplete="street-address"
-              placeholder="Numéro, rue…"
-              required
-            />
-            <span class="field__error" id="err-address" hidden></span>
-            <span class="field__hint" id="address-hint">
-              L’autocomplétion Google peut compléter la ville et le code postal si une clé API est configurée dans le script.
-            </span>
-          </label>
-
-          <label class="field">
-            <span class="field__label">Ville</span>
-            <input
-              type="text"
-              name="city"
-              id="city"
-              autocomplete="address-level2"
-              placeholder="Ex. Lyon"
-              required
-            />
-            <span class="field__error" id="err-city" hidden></span>
-          </label>
-
           <label class="field">
             <span class="field__label">Code postal</span>
             <input
@@ -140,15 +110,33 @@
           </label>
 
           <label class="field">
-            <span class="field__label">Revenus fiscaux de référence (€ / an)</span>
-            <input type="number" name="income" id="income" min="0" step="1" placeholder="Ex. 32000" required />
-            <span class="field__error" id="err-income" hidden></span>
+            <span class="field__label">Ville</span>
+            <input
+              type="text"
+              name="city"
+              id="city"
+              autocomplete="address-level2"
+              placeholder="Ex. Lyon"
+              required
+            />
+            <span class="field__error" id="err-city" hidden></span>
           </label>
 
           <label class="field">
             <span class="field__label">Personnes dans le foyer</span>
             <input type="number" name="household" id="household" min="1" max="20" step="1" value="1" required />
             <span class="field__error" id="err-household" hidden></span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Tranche de revenus du foyer</span>
+            <select name="income" id="income" required disabled>
+              <option value="">—</option>
+            </select>
+            <span class="field__hint" id="income-hint">
+              Indiquez d’abord le code postal (5 chiffres) et le nombre de personnes du foyer.
+            </span>
+            <span class="field__error" id="err-income" hidden></span>
           </label>
 
           <label class="field field--full">

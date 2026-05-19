@@ -4,7 +4,7 @@
  * Ce fichier assemble l’interface : barèmes MPR et plafonds dans ce fichier ;
  * calculs CEE dans `cee-calculator.js` (chargé avant ce script).
  * 1. Plafonds et catégorie de revenus (Île-de-France / autres régions)
- * 2. Adresse / code postal → région ; autocomplétion Google (optionnelle)
+ * 2. Code postal → région (Île-de-France vs autres)
  * 3. Calcul MaPrimeRénov’ (montant d’aide) et branchement calculateCEEPrime (CEE)
  * 4. Animation de progression et affichage du résultat
  */
@@ -37,15 +37,12 @@ const CATEGORY_LABELS = {
   superieur: "Revenus supérieurs",
 };
 
-// ---------------------------------------------------------------------------
-// 1b. Adresse / code postal → région (Île-de-France vs autres) + Google Places
-// ---------------------------------------------------------------------------
+/** Valeurs possibles du champ #income (fourchettes ANAH). */
+const INCOME_CATEGORY_VALUES = ["tres_modeste", "modeste", "intermediaire", "superieur"];
 
-/**
- * Clé API Google Maps (Places). Laisser vide pour désactiver l’autocomplétion.
- * Console : https://console.cloud.google.com/ — activer « Places API » et « Maps JavaScript API ».
- */
-const GOOGLE_MAPS_API_KEY = "";
+// ---------------------------------------------------------------------------
+// 1b. Code postal → région (Île-de-France vs autres)
+// ---------------------------------------------------------------------------
 
 /** Départements d’Île-de-France : préfixes des codes postaux à 5 chiffres. */
 const IDF_DEPARTMENTS_PREFIX = ["75", "77", "78", "91", "92", "93", "94", "95"];
@@ -69,20 +66,17 @@ function deriveRegionFromPostalCode(cp5) {
 // ---------------------------------------------------------------------------
 
 /**
- * Calcule la catégorie de revenus à partir du barème officiel simplifié.
- * @param {number} revenuFiscalRef - Revenu fiscal de référence annuel (€)
- * @param {number} nbPersonnes - Nombre de personnes du foyer (≥ 1)
- * @param {boolean} ileDeFrance - true si logement en Île-de-France
- * @returns {'tres_modeste'|'modeste'|'intermediaire'|'superieur'}
+ * Plafonds annuels de RFR (grille ANAH : très modestes / modestes / intermédiaires).
+ * @param {number} nbPersonnes
+ * @param {boolean} ileDeFrance
+ * @returns {{ plafondTM: number, plafondM: number, plafondI: number }}
  */
-function getCategorieRevenus(revenuFiscalRef, nbPersonnes, ileDeFrance) {
+function getPlafondsRevenus(nbPersonnes, ileDeFrance) {
   const t = ileDeFrance ? THRESHOLDS_IDF : THRESHOLDS_AUTRES;
   const n = Math.max(1, Math.floor(Number(nbPersonnes)) || 1);
-
   let plafondTM;
   let plafondM;
   let plafondI;
-
   if (n <= 5) {
     plafondTM = t.tresModeste[n];
     plafondM = t.modeste[n];
@@ -93,7 +87,18 @@ function getCategorieRevenus(revenuFiscalRef, nbPersonnes, ileDeFrance) {
     plafondM = t.modeste[5] + sup * t.extra.modeste;
     plafondI = t.intermediaire[5] + sup * t.extra.intermediaire;
   }
+  return { plafondTM, plafondM, plafondI };
+}
 
+/**
+ * Calcule la catégorie de revenus à partir du barème officiel simplifié.
+ * @param {number} revenuFiscalRef - Revenu fiscal de référence annuel (€)
+ * @param {number} nbPersonnes - Nombre de personnes du foyer (≥ 1)
+ * @param {boolean} ileDeFrance - true si logement en Île-de-France
+ * @returns {'tres_modeste'|'modeste'|'intermediaire'|'superieur'}
+ */
+function getCategorieRevenus(revenuFiscalRef, nbPersonnes, ileDeFrance) {
+  const { plafondTM, plafondM, plafondI } = getPlafondsRevenus(nbPersonnes, ileDeFrance);
   if (revenuFiscalRef <= plafondTM) return "tres_modeste";
   if (revenuFiscalRef <= plafondM) return "modeste";
   if (revenuFiscalRef <= plafondI) return "intermediaire";
@@ -164,9 +169,7 @@ const MAPRIME_AGE_MIN_LOGEMENT = 15;
 
 /** Statuts pour lesquels aucune prime MaPrimeRénov’ n’est calculée. */
 const MAPRIME_STATUTS_EXCLUS = {
-  locataire: "Locataire : non éligible à MaPrimeRénov’.",
-  residence_secondaire: "Propriétaire d’une résidence secondaire : non éligible à MaPrimeRénov’.",
-  sci: "SCI / société : non éligible à MaPrimeRénov’.",
+  autre: "Autre statut : non éligible à MaPrimeRénov’.",
 };
 
 /**
@@ -347,11 +350,32 @@ const resultBlocage = document.getElementById("result-blocage");
 const resultSituation = document.getElementById("result-situation");
 const resultBreakdown = document.getElementById("result-breakdown");
 const resultBreakdownCEE = document.getElementById("result-breakdown-cee");
-const addressInput = document.getElementById("address");
-const cityInput = document.getElementById("city");
 const postalInput = document.getElementById("postalCode");
 const regionInput = document.getElementById("region");
-const addressHint = document.getElementById("address-hint");
+const householdInput = document.getElementById("household");
+const incomeSelect = document.getElementById("income");
+const incomeHint = document.getElementById("income-hint");
+
+const INCOME_HINT_DEFAULT =
+  "Indiquez d’abord le code postal (5 chiffres) et le nombre de personnes du foyer.";
+
+function setIncomePlaceholderOption() {
+  const opt = document.createElement("option");
+  opt.value = "";
+  opt.textContent = "—";
+  incomeSelect.appendChild(opt);
+}
+
+function setIncomeHint(text) {
+  if (!incomeHint) return;
+  if (text) {
+    incomeHint.textContent = text;
+    incomeHint.hidden = false;
+  } else {
+    incomeHint.textContent = "";
+    incomeHint.hidden = true;
+  }
+}
 
 /** Ordre de focus en cas d’erreurs multiples (messages sous chaque champ). */
 const ERROR_FIELD_IDS = [
@@ -359,11 +383,10 @@ const ERROR_FIELD_IDS = [
   "status",
   "constructionYear",
   "surfaceARenover",
-  "address",
-  "city",
   "postalCode",
-  "income",
+  "city",
   "household",
+  "income",
   "heatingBefore",
 ];
 
@@ -648,96 +671,87 @@ function syncRegionFromPostal() {
   postalInput.value = cp;
   const r = deriveRegionFromPostalCode(cp);
   regionInput.value = r || "";
+  updateIncomeSelectOptions();
+}
+
+/**
+ * Remplit #income avec les 4 fourchettes ANAH (montants selon CP et taille du foyer).
+ */
+function updateIncomeSelectOptions() {
+  const prev = incomeSelect.value;
+  const cp = normalizePostalDigits(postalInput.value);
+  const household = Math.floor(Number(householdInput.value));
+
+  incomeSelect.innerHTML = "";
+
+  if (!/^\d{5}$/.test(cp)) {
+    setIncomePlaceholderOption();
+    incomeSelect.disabled = true;
+    setIncomeHint(INCOME_HINT_DEFAULT);
+    return;
+  }
+
+  if (!household || household < 1 || household > 20) {
+    setIncomePlaceholderOption();
+    incomeSelect.disabled = true;
+    setIncomeHint("Indiquez le nombre de personnes du foyer (1 à 20).");
+    return;
+  }
+
+  const regionKind = deriveRegionFromPostalCode(cp);
+  if (!regionKind) {
+    setIncomePlaceholderOption();
+    incomeSelect.disabled = true;
+    setIncomeHint("Code postal invalide pour le barème des revenus.");
+    return;
+  }
+
+  setIncomeHint("");
+
+  const ileDeFrance = regionKind === "idf";
+  const { plafondTM, plafondM, plafondI } = getPlafondsRevenus(household, ileDeFrance);
+
+  const defs = [
+    {
+      value: "tres_modeste",
+      label: "Jusqu’à " + formatEuros(plafondTM),
+    },
+    {
+      value: "modeste",
+      label: "Plus de " + formatEuros(plafondTM) + " et jusqu’à " + formatEuros(plafondM),
+    },
+    {
+      value: "intermediaire",
+      label: "Plus de " + formatEuros(plafondM) + " et jusqu’à " + formatEuros(plafondI),
+    },
+    {
+      value: "superieur",
+      label: "Plus de " + formatEuros(plafondI),
+    },
+  ];
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "—";
+  incomeSelect.appendChild(placeholder);
+
+  defs.forEach(function (d) {
+    const opt = document.createElement("option");
+    opt.value = d.value;
+    opt.textContent = d.label;
+    incomeSelect.appendChild(opt);
+  });
+
+  incomeSelect.disabled = false;
+  if (INCOME_CATEGORY_VALUES.includes(prev)) {
+    incomeSelect.value = prev;
+  }
 }
 
 postalInput.addEventListener("input", syncRegionFromPostal);
 postalInput.addEventListener("blur", syncRegionFromPostal);
+householdInput.addEventListener("input", updateIncomeSelectOptions);
 
-function setAddressHint(text) {
-  addressHint.textContent = text;
-}
-
-function initPlacesAutocomplete() {
-  const g = window.google;
-  if (!g || !g.maps || !g.maps.places) return;
-  const autocomplete = new g.maps.places.Autocomplete(addressInput, {
-    componentRestrictions: { country: "fr" },
-    fields: ["address_components", "formatted_address"],
-    types: ["address"],
-  });
-  autocomplete.addListener("place_changed", function () {
-    const place = autocomplete.getPlace();
-    if (!place.address_components) return;
-    let streetNum = "";
-    let route = "";
-    let locality = "";
-    let postal = "";
-    for (let i = 0; i < place.address_components.length; i += 1) {
-      const c = place.address_components[i];
-      const t = c.types;
-      if (t.includes("street_number")) streetNum = c.long_name;
-      if (t.includes("route")) route = c.long_name;
-      if (t.includes("locality")) locality = c.long_name;
-      if (t.includes("postal_town") && !locality) locality = c.long_name;
-      if (t.includes("postal_code")) postal = c.long_name;
-    }
-    const line = [streetNum, route].filter(Boolean).join(" ").trim();
-    if (line) {
-      addressInput.value = line;
-    } else if (place.formatted_address) {
-      const first = place.formatted_address.split(",")[0];
-      addressInput.value = first ? first.trim() : place.formatted_address;
-    }
-    if (locality) {
-      cityInput.value = locality;
-    }
-    const digits = normalizePostalDigits(postal);
-    if (digits.length === 5) {
-      postalInput.value = digits;
-      syncRegionFromPostal();
-    }
-    clearFieldErrors();
-  });
-  setAddressHint(
-    "Suggestions d’adresses activées (France). Ville et code postal sont complétés lorsque Google les fournit."
-  );
-}
-
-/** Callback global pour le chargement async de l’API Google Maps. */
-window.initSimulateurPlaces = function () {
-  try {
-    initPlacesAutocomplete();
-  } catch (e) {
-    setAddressHint(
-      "Autocomplétion indisponible : saisissez l’adresse et un code postal à 5 chiffres."
-    );
-  }
-  delete window.initSimulateurPlaces;
-};
-
-function loadGooglePlacesScript() {
-  if (!GOOGLE_MAPS_API_KEY) {
-    setAddressHint(
-      "Autocomplétion non configurée : ajoutez votre clé dans GOOGLE_MAPS_API_KEY (app.js), ou saisissez l’adresse et un code postal à 5 chiffres."
-    );
-    return;
-  }
-  const script = document.createElement("script");
-  script.src =
-    "https://maps.googleapis.com/maps/api/js?key=" +
-    encodeURIComponent(GOOGLE_MAPS_API_KEY) +
-    "&libraries=places&language=fr&callback=initSimulateurPlaces";
-  script.async = true;
-  script.defer = true;
-  script.onerror = function () {
-    setAddressHint(
-      "Impossible de charger l’API Google. Vérifiez la clé réseau et saisissez un code postal à 5 chiffres."
-    );
-  };
-  document.head.appendChild(script);
-}
-
-loadGooglePlacesScript();
 syncRegionFromPostal();
 
 (function setConstructionYearMax() {
@@ -975,7 +989,7 @@ form.addEventListener("submit", function (e) {
   const data = new FormData(form);
   const postal = normalizePostalDigits(data.get("postalCode"));
   const region = deriveRegionFromPostalCode(postal);
-  const income = Number(data.get("income"));
+  const categorieRevenus = String(data.get("income") ?? "");
   const household = Number(data.get("household"));
   let hasError = false;
 
@@ -1009,12 +1023,6 @@ form.addEventListener("submit", function (e) {
     hasError = true;
   }
 
-  const addressLine = String(data.get("addressLine") ?? "").trim();
-  if (!addressLine) {
-    showFieldError("address", "Indiquez le numéro et la rue.");
-    hasError = true;
-  }
-
   const cityLine = String(data.get("city") ?? "").trim();
   if (!cityLine) {
     showFieldError("city", "Indiquez la ville.");
@@ -1029,13 +1037,13 @@ form.addEventListener("submit", function (e) {
     hasError = true;
   }
 
-  if (data.get("income") === "" || Number.isNaN(income) || income < 0) {
-    showFieldError("income", "Indiquez vos revenus fiscaux de référence.");
+  if (data.get("household") === "" || Number.isNaN(household) || household < 1 || household > 20) {
+    showFieldError("household", "Indiquez le nombre de personnes du foyer (1 à 20).");
     hasError = true;
   }
 
-  if (data.get("household") === "" || Number.isNaN(household) || household < 1 || household > 20) {
-    showFieldError("household", "Indiquez le nombre de personnes du foyer (1 à 20).");
+  if (!INCOME_CATEGORY_VALUES.includes(categorieRevenus)) {
+    showFieldError("income", "Choisissez votre tranche de revenus.");
     hasError = true;
   }
 
@@ -1096,7 +1104,7 @@ form.addEventListener("submit", function (e) {
 
   runProgressAnimation(function afterProgress() {
     const ileDeFrance = region === "idf";
-    const categorie = getCategorieRevenus(income, household, ileDeFrance);
+    const categorie = categorieRevenus;
     const housingTypeVal = data.get("housingType");
     const heatingBeforeVal = data.get("heatingBefore");
     const statusVal = data.get("status");
