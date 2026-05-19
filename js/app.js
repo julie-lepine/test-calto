@@ -118,7 +118,6 @@ function getCategorieRevenus(revenuFiscalRef, nbPersonnes, ileDeFrance) {
 const WORK_TYPES_SURFACE_M2 = [
   "rampants",
   "toiture terrasses",
-  "chaudieres biomasse",
   "combles perdus",
   "murs",
   "plancher",
@@ -134,6 +133,7 @@ const WORK_TYPES_FORFAIT_SANS_SAISIE = [
   "pac geo",
   "chauffe eau solaire individuel",
   "chauffe eau solaire combiné",
+  "chaudieres biomasse",
   "poele buches",
   "poele granules",
   "foyer ferme",
@@ -174,15 +174,31 @@ const WORK_TYPE_CATEGORIES = [
   {
     id: "chauffage",
     label: "Chauffage",
-    workTypes: [
-      "chauffe eau thermo",
-      "pac air eau",
-      "pac geo",
-      "chauffe eau solaire individuel",
-      "chauffe eau solaire combiné",
-      "chaudieres biomasse",
-      "pac air air",
-      "cuve fioul",
+    subcategories: [
+      {
+        id: "pac",
+        label: "Pompes à chaleur",
+        workTypes: ["pac air eau", "pac air air", "pac geo"],
+      },
+      {
+        id: "chaudieres-biomasse",
+        label: "Chaudière biomasse",
+        workTypes: ["chaudieres biomasse"],
+      },
+      {
+        id: "chauffe-eau",
+        label: "Chauffe-eau",
+        workTypes: [
+          "chauffe eau thermo",
+          "chauffe eau solaire individuel",
+          "chauffe eau solaire combiné",
+        ],
+      },
+      {
+        id: "cuve-fioul",
+        label: "Dépose de cuve à fioul",
+        workTypes: ["cuve fioul"],
+      },
     ],
   },
   {
@@ -201,6 +217,45 @@ function getWorkTypeCategoryById(categoryId) {
   return WORK_TYPE_CATEGORIES.find(function (c) {
     return c.id === categoryId;
   });
+}
+
+function categoryUsesSubcategories(cat) {
+  return Boolean(cat && Array.isArray(cat.subcategories) && cat.subcategories.length > 0);
+}
+
+function getWorkTypeSubcategory(categoryId, subcategoryId) {
+  const cat = getWorkTypeCategoryById(categoryId);
+  if (!categoryUsesSubcategories(cat)) return null;
+  return (
+    cat.subcategories.find(function (s) {
+      return s.id === subcategoryId;
+    }) || null
+  );
+}
+
+function getWorkTypesForFunnelStep(categoryId, subcategoryId) {
+  const cat = getWorkTypeCategoryById(categoryId);
+  if (!cat) return [];
+  if (subcategoryId) {
+    const sub = getWorkTypeSubcategory(categoryId, subcategoryId);
+    return sub ? sub.workTypes.slice() : [];
+  }
+  if (categoryUsesSubcategories(cat)) return [];
+  return (cat.workTypes || []).slice();
+}
+
+function setProjectFunnelTypesStepVisible(row, visible) {
+  const step = row.querySelector(".project-funnel__types-step");
+  if (!step) return;
+  step.hidden = !visible;
+  step.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function setProjectFunnelSubcategoriesVisible(row, visible) {
+  const panel = row.querySelector(".project-funnel__subcategories");
+  if (!panel) return;
+  panel.hidden = !visible;
+  panel.setAttribute("aria-hidden", visible ? "false" : "true");
 }
 
 function getWorkTypeDisplayLabel(value) {
@@ -534,10 +589,17 @@ function showProjectRowError(row, field, message) {
   }
   if (field === "workType") {
     const categoryId = row.dataset.selectedCategory;
-    const focusTarget = categoryId
-      ? row.querySelector(".project-funnel__type-btn:not([aria-pressed='true'])") ||
-        row.querySelector(".project-funnel__type-btn")
-      : row.querySelector(".project-funnel__category-btn");
+    const cat = categoryId ? getWorkTypeCategoryById(categoryId) : null;
+    let focusTarget = row.querySelector(".project-funnel__category-btn");
+    if (categoryId && cat && categoryUsesSubcategories(cat) && !row.dataset.selectedSubcategory) {
+      focusTarget =
+        row.querySelector(".project-funnel__subcategory-btn:not([aria-pressed='true'])") ||
+        row.querySelector(".project-funnel__subcategory-btn");
+    } else if (categoryId) {
+      focusTarget =
+        row.querySelector(".project-funnel__type-btn:not([aria-pressed='true'])") ||
+        row.querySelector(".project-funnel__type-btn");
+    }
     if (focusTarget) focusTarget.setAttribute("aria-invalid", "true");
   }
   const input =
@@ -567,9 +629,13 @@ function focusFirstInvalidField() {
   if (row) {
     if (err.classList.contains("project-err-workType")) {
       const categoryId = row.dataset.selectedCategory;
-      const funnelFocus = categoryId
-        ? row.querySelector(".project-funnel__type-btn") || row.querySelector(".project-funnel__category-btn")
-        : row.querySelector(".project-funnel__category-btn");
+      const cat = categoryId ? getWorkTypeCategoryById(categoryId) : null;
+      let funnelFocus = row.querySelector(".project-funnel__category-btn");
+      if (categoryId && cat && categoryUsesSubcategories(cat) && !row.dataset.selectedSubcategory) {
+        funnelFocus = row.querySelector(".project-funnel__subcategory-btn");
+      } else if (categoryId) {
+        funnelFocus = row.querySelector(".project-funnel__type-btn");
+      }
       funnelFocus?.focus({ preventScroll: true });
     } else {
       row.querySelector(".project-quantity")?.focus({ preventScroll: true });
@@ -676,12 +742,31 @@ function updateProjectChrome() {
   });
 }
 
-function renderProjectTypeButtons(row, categoryId) {
+function renderProjectSubcategoryButtons(row, categoryId) {
   const cat = getWorkTypeCategoryById(categoryId);
-  const grid = row.querySelector(".project-funnel__types-grid");
-  if (!grid || !cat) return;
+  const grid = row.querySelector(".project-funnel__subcategories-grid");
+  if (!grid || !cat || !categoryUsesSubcategories(cat)) return;
   grid.replaceChildren();
-  cat.workTypes.forEach(function (workValue) {
+  cat.subcategories.forEach(function (sub) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "project-funnel__pill project-funnel__subcategory-btn";
+    btn.textContent = sub.label;
+    btn.dataset.subcategory = sub.id;
+    btn.setAttribute("aria-pressed", "false");
+    btn.addEventListener("click", function () {
+      selectProjectSubcategory(row, categoryId, sub.id);
+    });
+    grid.appendChild(btn);
+  });
+}
+
+function renderProjectTypeButtons(row, categoryId, subcategoryId) {
+  const grid = row.querySelector(".project-funnel__types-grid");
+  if (!grid) return;
+  const workTypes = getWorkTypesForFunnelStep(categoryId, subcategoryId);
+  grid.replaceChildren();
+  workTypes.forEach(function (workValue) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "project-funnel__pill project-funnel__type-btn";
@@ -700,11 +785,16 @@ function selectProjectCategory(row, categoryId) {
   if (!cat) return;
 
   row.dataset.selectedCategory = categoryId;
+  delete row.dataset.selectedSubcategory;
   clearRowProjectError(row, "workType");
 
   row.querySelectorAll(".project-funnel__category-btn").forEach(function (btn) {
     const selected = btn.dataset.category === categoryId;
     btn.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+
+  row.querySelectorAll(".project-funnel__subcategory-btn").forEach(function (btn) {
+    btn.setAttribute("aria-pressed", "false");
   });
 
   const workSel = row.querySelector(".project-work-type");
@@ -717,14 +807,58 @@ function selectProjectCategory(row, categoryId) {
     btn.setAttribute("aria-pressed", "false");
   });
 
-  renderProjectTypeButtons(row, categoryId);
-
   const typesPanel = row.querySelector(".project-funnel__types");
   if (typesPanel) {
     typesPanel.hidden = false;
     typesPanel.setAttribute("aria-hidden", "false");
   }
 
+  if (categoryUsesSubcategories(cat)) {
+    setProjectFunnelSubcategoriesVisible(row, true);
+    renderProjectSubcategoryButtons(row, categoryId);
+    setProjectFunnelTypesStepVisible(row, false);
+    renderProjectTypeButtons(row, categoryId, null);
+  } else {
+    setProjectFunnelSubcategoriesVisible(row, false);
+    setProjectFunnelTypesStepVisible(row, true);
+    renderProjectTypeButtons(row, categoryId, null);
+  }
+
+  updateQuantityForRow(row);
+}
+
+function selectProjectSubcategory(row, categoryId, subcategoryId) {
+  const sub = getWorkTypeSubcategory(categoryId, subcategoryId);
+  if (!sub) return;
+
+  row.dataset.selectedSubcategory = subcategoryId;
+  clearRowProjectError(row, "workType");
+
+  row.querySelectorAll(".project-funnel__subcategory-btn").forEach(function (btn) {
+    btn.setAttribute("aria-pressed", btn.dataset.subcategory === subcategoryId ? "true" : "false");
+  });
+
+  row.querySelectorAll(".project-funnel__type-btn").forEach(function (btn) {
+    btn.setAttribute("aria-pressed", "false");
+  });
+
+  const grid = row.querySelector(".project-funnel__types-grid");
+  if (grid) grid.replaceChildren();
+
+  if (sub.workTypes.length === 1) {
+    setProjectFunnelTypesStepVisible(row, false);
+    selectProjectWorkType(row, sub.workTypes[0]);
+    return;
+  }
+
+  const workSel = row.querySelector(".project-work-type");
+  if (workSel) {
+    workSel.value = "";
+    workSel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  setProjectFunnelTypesStepVisible(row, true);
+  renderProjectTypeButtons(row, categoryId, subcategoryId);
   updateQuantityForRow(row);
 }
 
@@ -798,6 +932,28 @@ function createProjectRow() {
   typesPanel.hidden = true;
   typesPanel.setAttribute("aria-hidden", "true");
 
+  const subPanel = document.createElement("div");
+  subPanel.className = "project-funnel__subcategories";
+  subPanel.hidden = true;
+  subPanel.setAttribute("aria-hidden", "true");
+
+  const subLabel = document.createElement("span");
+  subLabel.className = "field__label";
+  subLabel.textContent = "Type d'équipement";
+
+  const subGrid = document.createElement("div");
+  subGrid.className = "project-funnel__subcategories-grid";
+  subGrid.setAttribute("role", "group");
+  subGrid.setAttribute("aria-label", "Type d'équipement");
+
+  subPanel.appendChild(subLabel);
+  subPanel.appendChild(subGrid);
+
+  const typesStep = document.createElement("div");
+  typesStep.className = "project-funnel__types-step";
+  typesStep.hidden = true;
+  typesStep.setAttribute("aria-hidden", "true");
+
   const typesLabel = document.createElement("span");
   typesLabel.className = "field__label";
   typesLabel.textContent = "Projet concerné";
@@ -807,8 +963,11 @@ function createProjectRow() {
   typesGrid.setAttribute("role", "group");
   typesGrid.setAttribute("aria-label", "Projet concerné");
 
-  typesPanel.appendChild(typesLabel);
-  typesPanel.appendChild(typesGrid);
+  typesStep.appendChild(typesLabel);
+  typesStep.appendChild(typesGrid);
+
+  typesPanel.appendChild(subPanel);
+  typesPanel.appendChild(typesStep);
 
   const workSel = workTypeMaster.cloneNode(true);
   workSel.disabled = false;
@@ -1473,9 +1632,14 @@ function validateSimulationForm(data) {
     const qVal = Number(quantityRaw);
 
     if (!wt) {
-      const msg = row.dataset.selectedCategory
-        ? "Choisissez le projet concerné."
-        : "Choisissez une famille de travaux.";
+      const catId = row.dataset.selectedCategory;
+      const cat = catId ? getWorkTypeCategoryById(catId) : null;
+      let msg = "Choisissez une famille de travaux.";
+      if (catId && cat && categoryUsesSubcategories(cat) && !row.dataset.selectedSubcategory) {
+        msg = "Choisissez un type d'équipement.";
+      } else if (catId) {
+        msg = "Choisissez le projet concerné.";
+      }
       showProjectRowError(row, "workType", msg);
       hasError = true;
       return;

@@ -38,9 +38,10 @@
       <p id="brand-header-subtitle" class="main__lead">
         Estimation indicative pour les primes <strong>CEE</strong> et <strong>MaPrimeRénov’</strong> : vous pouvez saisir <strong>plusieurs projets de travaux</strong> (lots) ; le total affiché est la somme des aides estimées par projet, selon votre foyer et le code postal du logement.
       </p>
-      <form id="simulation-form" class="card form" novalidate>
+      <form id="simulation-form" class="card form brand-secondary" novalidate>
         <input type="hidden" name="region" id="region" value="" />
         <h2 class="card__title">Votre situation</h2>
+        <hr class="card__title-bar brand-primary" aria-hidden="true" />
 
         <div class="form__grid">
           <label class="field">
@@ -175,15 +176,15 @@
             <option value="menuiseries">Remplacement de fenêtres et porte-fenêtres</option>
           </optgroup>
           <optgroup label="Chauffage &amp; eau chaude">
-            <option value="chauffe eau thermo">Chauffe-eau thermodynamique</option>
             <option value="pac air eau">Pompe à chaleur air / eau</option>
+            <option value="pac air air">Pompe à chaleur air / air</option>
             <option value="pac geo">
               Pompe à chaleur géothermique ou sur capteurs solaires (dont PAC hybrides)
             </option>
+            <option value="chaudieres biomasse">Chaudière biomasse</option>
+            <option value="chauffe eau thermo">Chauffe-eau thermodynamique</option>
             <option value="chauffe eau solaire individuel">Chauffe-eau solaire individuel</option>
             <option value="chauffe eau solaire combiné">Chauffe-eau solaire combiné</option>
-            <option value="chaudieres biomasse">Chaudière biomasse</option>
-            <option value="pac air air">Pompe à chaleur air / air</option>
             <option value="cuve fioul">Dépose de cuve à fioul</option>
           </optgroup>
           <optgroup label="Foyer &amp; bois">
