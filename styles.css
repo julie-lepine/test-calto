@@ -1,29 +1,9 @@
-/* --- Variables marque blanche (surcharge via SIMULATOR_BRAND.cssVars) --- */
-:root {
-  /* Semantique : à surcharger en priorité pour un déploiement client */
-  --brand-primary: #f9b908;
-  --brand-primary-muted: #f9b908a8;
-  --brand-primary-hover: #f9b908;
-  --brand-primary-soft: #f9b90838;
-  --brand-on-primary: #0a0f0d;
-  --brand-surface: #ffffff;
-  --brand-text: #000000;
-  --brand-text-muted: #94a3b8;
-  --brand-danger: #e07a6e;
-  --brand-radius: 12px;
-  --brand-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-  --brand-page-max-width: 640px;
-  --brand-font-sans: "DM Sans", system-ui, sans-serif;
-  --brand-font-display: "Fraunces", Georgia, serif;
-  --brand-bg-page: #ffffff;
-  --brand-gradient-spot-1: rgba(61, 154, 122, 0.12);
-  --brand-gradient-spot-1-pos: 10% -20%;
-  --brand-gradient-spot-2: rgba(100, 120, 200, 0.08);
-  --brand-gradient-spot-2-pos: 100% 50%;
-  --brand-progress-end: #6bc4a3;
-  --brand-header-logo-max-h: 88px;
+/*
+ * Mise en page & structure uniquement.
+ * Couleurs / rayons / ombres : définis dans brand-config.js → variables --brand-* sur <html>.
+ */
 
-  /* Alias historiques (dérivés des tokens marque) */
+:root {
   --bg: var(--brand-surface);
   --bg-card: var(--brand-surface);
   --border: var(--brand-primary);
@@ -76,11 +56,11 @@ body {
   padding: 1.5rem 1.25rem 3rem;
 }
 
-/* --- En-tête : bandeau logo + CTA, puis titre (h1) --- */
+/* --- En-tête --- */
 .site-header {
-  background: var(--brand-surface);
-  border-top: 3px solid var(--brand-text);
-  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.06);
+  background: var(--brand-header-background);
+  border-top: var(--brand-header-top-border-width) solid var(--brand-header-top-border-color);
+  box-shadow: var(--brand-header-shadow);
 }
 
 .site-header__inner {
@@ -96,7 +76,7 @@ body {
   flex-wrap: wrap;
   gap: 0.75rem 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--brand-header-divider-color);
 }
 
 .site-header__logo-row-cta {
@@ -118,7 +98,7 @@ body {
   align-items: center;
   line-height: 0;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--brand-control-radius);
 }
 
 .header__logo-link:focus-visible {
@@ -147,12 +127,13 @@ body {
 
 .site-header__intro h1 {
   font-family: var(--font-display);
-  font-size: clamp(1.45rem, 4vw, 1.85rem);
+  font-size: var(--brand-title-page-size);
   font-weight: 600;
   margin: 0;
+  text-align: center;
   letter-spacing: -0.02em;
   line-height: 1.2;
-  color: var(--brand-text);
+  color: var(--brand-header-text);
 }
 
 .site-header__pill {
@@ -163,7 +144,7 @@ body {
   font-weight: 700;
   font-family: var(--font-sans);
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: var(--brand-radius-pill);
   padding: 0.55rem 1.15rem;
   line-height: 1.2;
   transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
@@ -171,7 +152,7 @@ body {
 }
 
 .site-header__pill--outline {
-  color: var(--brand-text);
+  color: var(--brand-header-text);
   background: transparent;
   border: 2px solid var(--brand-primary-hover);
   box-shadow: none;
@@ -183,7 +164,7 @@ body {
 }
 
 .site-header__pill:focus-visible {
-  outline: 2px solid var(--brand-text);
+  outline: 2px solid var(--brand-header-text);
   outline-offset: 2px;
 }
 
@@ -275,7 +256,7 @@ body {
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--brand-control-radius);
   padding: 0.65rem 0.75rem;
   width: 100%;
   min-width: 0;
@@ -297,7 +278,7 @@ body {
 
 .field input[aria-invalid="true"]:focus,
 .field select[aria-invalid="true"]:focus {
-  box-shadow: 0 0 0 3px rgba(224, 122, 110, 0.2);
+  box-shadow: var(--brand-danger-focus-ring);
 }
 
 .field input::placeholder {
@@ -305,12 +286,10 @@ body {
   opacity: 0.7;
 }
 
-/* Forfaits sans saisie : le bloc quantité doit rester totalement absent du flux */
 #quantity-field-wrap[hidden] {
   display: none !important;
 }
 
-/* Liste d’adresses Google au-dessus des cartes du formulaire */
 .pac-container {
   z-index: 10000;
 }
@@ -324,7 +303,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--brand-control-radius);
   padding: 0.85rem 1.5rem;
   transition: transform 0.15s, background 0.2s, opacity 0.2s;
 }
@@ -335,25 +314,27 @@ body {
 
 .btn--primary {
   width: 100%;
-  background: var(--accent);
-  color: var(--brand-on-primary);
+  background: var(--brand-btn-primary-bg);
+  color: var(--brand-btn-primary-color);
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--brand-btn-primary-hover-bg);
+  color: var(--brand-btn-primary-hover-color);
 }
 
 .btn--secondary {
   width: 100%;
   margin-top: 0.75rem;
-  background: transparent;
-  color: var(--accent-hover);
-  border: 1px solid var(--border);
+  background: var(--brand-btn-secondary-bg);
+  color: var(--brand-btn-secondary-color);
+  border: 1px solid var(--brand-btn-secondary-border);
 }
 
 .btn--secondary:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--brand-btn-secondary-hover-border);
+  background: var(--brand-btn-secondary-hover-bg);
+  color: var(--brand-btn-secondary-hover-color);
 }
 
 .btn--ghost {
@@ -363,7 +344,7 @@ body {
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--brand-control-radius-sm);
 }
 
 .btn--ghost:hover:not(:disabled) {
@@ -397,7 +378,7 @@ body {
   padding: 1rem;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--brand-control-radius);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -425,13 +406,13 @@ body {
   cursor: not-allowed;
 }
 
-/* --- Barre de progression --- */
+/* --- Progression --- */
 .progress {
   margin-top: 1.25rem;
   position: relative;
-  height: 6px;
+  height: var(--brand-progress-track-height);
   background: var(--border);
-  border-radius: 999px;
+  border-radius: var(--brand-radius-pill);
   overflow: hidden;
 }
 
@@ -443,7 +424,7 @@ body {
   height: 100%;
   width: 0%;
   background: linear-gradient(90deg, var(--accent-hover), var(--brand-progress-end));
-  border-radius: 999px;
+  border-radius: var(--brand-radius-pill);
   transition: width 0.35s ease-out;
 }
 
@@ -477,9 +458,9 @@ body {
 .result__blocage {
   margin: 0 0 1rem;
   padding: 0.75rem 1rem;
-  background: rgba(224, 122, 110, 0.12);
-  border: 1px solid rgba(224, 122, 110, 0.35);
-  border-radius: 8px;
+  background: var(--brand-danger-bg-soft);
+  border: 1px solid var(--brand-danger-border-strong);
+  border-radius: var(--brand-control-radius);
   font-size: 0.9rem;
   color: var(--danger);
   line-height: 1.45;
@@ -522,7 +503,7 @@ body {
   padding: 0.85rem 1rem;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--brand-control-radius);
 }
 
 .result-product__row {
@@ -575,7 +556,7 @@ body {
 
 .result__amount strong {
   font-family: var(--font-display);
-  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  font-size: var(--brand-title-amount-size);
   font-weight: 600;
   color: var(--accent-hover);
 }
@@ -593,7 +574,6 @@ body {
   color: var(--danger);
 }
 
-/* --- Pied de page --- */
 .footer {
   margin-top: 2rem;
   text-align: center;
